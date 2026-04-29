@@ -1,0 +1,9 @@
+.performance-graph {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.7);
+}

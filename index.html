@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Smuggler's Run - A space trading and combat game" />
+    <meta name="keywords" content="game, space, trading, javascript, canvas" />
+    <meta name="author" content="Your Name" />
+    <meta name="theme-color" content="#000000" />
+
+    <!-- Open Graph / Social Media Meta Tags -->
+    <meta property="og:title" content="Smuggler's Run" />
+    <meta
+      property="og:description"
+      content="A space trading and combat game built with vanilla JavaScript and HTML5 Canvas"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/assets/og-image.png" />
+
+    <title>Smuggler's Run</title>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/assets/favicon.png" />
+    <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+
+    <!-- Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div id="gameContainer">
+      <!-- Main Menu Screen -->
+      <div id="mainMenuScreen" class="screen">
+        <h1>Smuggler's Run</h1>
+        <div class="high-score-display"></div>
+        <div class="menu-buttons">
+          <button class="start-button">Start Game</button>
+          <button class="options-button">Options</button>
+          <button class="credits-button">Credits</button>
+        </div>
+      </div>
+
+      <!-- Game UI -->
+      <div id="gameUI" class="not-started">
+        <canvas id="gameCanvas"></canvas>
+        <canvas id="gridOverlay"></canvas>
+        <canvas id="minimap"></canvas>
+
+        <!-- HUD -->
+        <div class="hud">
+          <div id="score"></div>
+          <div id="health"></div>
+          <div id="fuel"></div>
+          <div id="cargo"></div>
+          <div id="credits"></div>
+        </div>
+
+        <!-- Trade Interface -->
+        <div id="loadScreen" class="trade-screen">
+          <h2></h2>
+          <div class="trade-info"></div>
+          <div class="trade-sections-container"></div>
+          <button id="exitUpgrade">Exit</button>
+        </div>
+      </div>
+
+      <!-- Options Screen -->
+      <div id="optionsScreen" class="screen">
+        <h2>Options</h2>
+        <div class="options-content">
+          <div class="option-group">
+            <label>Music Volume</label>
+            <input type="range" id="musicVolume" min="0" max="100" value="100" />
+          </div>
+          <div class="option-group">
+            <label>SFX Volume</label>
+            <input type="range" id="sfxVolume" min="0" max="100" value="100" />
+          </div>
+          <div class="option-group">
+            <label>Difficulty</label>
+            <select class="difficulty-select">
+              <option value="easy">Easy</option>
+              <option value="normal" selected>Normal</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+        </div>
+        <button class="back-button">Back</button>
+      </div>
+
+      <!-- Credits Screen -->
+      <div id="creditsScreen" class="screen">
+        <div class="credits-content"></div>
+        <button class="back-button">Back</button>
+      </div>
+
+      <!-- Pause Menu Screen -->
+      <div id="pauseMenuScreen" class="screen">
+        <h2>Paused</h2>
+        <div class="menu-buttons">
+          <button class="resume-button">Resume</button>
+          <button class="options-button">Options</button>
+          <button class="main-menu-button">Main Menu</button>
+        </div>
+      </div>
+
+      <!-- Loading Screen -->
+      <div id="loadingScreen" class="screen">
+        <h2>Loading</h2>
+        <div class="progress-bar"></div>
+        <div class="status-text">Loading...</div>
+      </div>
+
+      <!-- Game Over Screen -->
+      <div id="gameOverScreen" class="screen">
+        <h2>Game Over</h2>
+        <div class="score-display"></div>
+        <div class="high-score-display"></div>
+        <div class="menu-buttons">
+          <button class="restart-button">Restart</button>
+          <button class="main-menu-button">Main Menu</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="src/index.js"></script>
+  </body>
+</html>

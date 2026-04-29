@@ -1,0 +1,56 @@
+export const GAME_CONFIG = {
+  WORLD: {
+    SIZE: 10000,
+    GRID_SIZE: 100,
+    STAR_COUNT: 1000,
+  },
+  PLAYER: {
+    STARTING_CREDITS: 1000,
+    STARTING_HEALTH: 100,
+    STARTING_FUEL: 100,
+    SPEED: 5,
+    ROTATION_SPEED: 3,
+    THRUST_POWER: 0.5,
+    MAX_SPEED: 10,
+  },
+  GAME: {
+    ASTEROID_COUNT: 50,
+    ENEMY_COUNT: 10,
+    STATION_COUNT: 5,
+    CARGO_COUNT: 20,
+    WAVE_DURATION: 300, // seconds
+    DIFFICULTY_INCREASE: 0.1,
+  },
+  STATIONS: {
+    COUNT: 5,
+    TRADE_RADIUS: 100,
+    SPAWN_RADIUS: 500,
+  },
+  ASTEROIDS: {
+    INITIAL_COUNT: 50,
+    SPAWN_RADIUS: 1000,
+    MIN_SIZE: 20,
+    MAX_SIZE: 50,
+  },
+  ENEMIES: {
+    INITIAL_COUNT: 10,
+    SPAWN_RADIUS: 1000,
+    SPEED: 3,
+    FIRE_RATE: 1,
+  },
+  CARGO: {
+    INITIAL_COUNT: 20,
+    SPAWN_RADIUS: 1000,
+    VALUE: 100,
+  },
+  PROJECTILES: {
+    SPEED: 10,
+    DAMAGE: 20,
+    LIFETIME: 1000,
+  },
+  PARTICLES: {
+    LIFETIME: 1000,
+    SPEED: 2,
+    SIZE: 2,
+  },
+};
