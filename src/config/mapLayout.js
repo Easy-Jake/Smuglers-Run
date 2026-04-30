@@ -12,8 +12,8 @@
  *        Start at the central trading station. Work your way out.
  */
 
-export const MAP_WIDTH = 8000;
-export const MAP_HEIGHT = 8000;
+export const MAP_WIDTH = 20000;
+export const MAP_HEIGHT = 20000;
 
 // --- ZONE DEFINITIONS ---
 // Each zone has a center, radius, difficulty tier, and resource type
@@ -24,8 +24,8 @@ export const ZONES = {
     name: 'Free Zone',
     description: "Safe space around Uncle Ricky's. Hydro and Carbon deposits. No hostiles.",
     tier: 0,
-    center: { x: 4000, y: 4000 },
-    radius: 1500,
+    center: { x: 10000, y: 10000 },
+    radius: 3000,
     resourceType: 'hydro',
     enemyTypes: [],
     enemyCount: 0,
@@ -41,8 +41,8 @@ export const ZONES = {
     name: 'The Junkyard',
     description: 'Ship graveyard west of the station. Scavenger scouts patrol the wrecks.',
     tier: 1,
-    center: { x: 1800, y: 3200 },
-    radius: 1200,
+    center: { x: 4500, y: 8000 },
+    radius: 2400,
     resourceType: 'ferro',
     enemyTypes: ['scout'],
     enemyCount: 3,
@@ -62,8 +62,8 @@ export const ZONES = {
     name: 'Ferro Fields',
     description: 'Iron-rich asteroid scatter. Easy pickings but watch for scouts.',
     tier: 1,
-    center: { x: 2800, y: 5200 },
-    radius: 1000,
+    center: { x: 7000, y: 13000 },
+    radius: 2000,
     resourceType: 'ferro',
     enemyTypes: ['scout'],
     enemyCount: 2,
@@ -80,8 +80,8 @@ export const ZONES = {
     name: 'DeepCore Mines',
     description: 'Abandoned mining operation. Something lives in the caves.',
     tier: 2,
-    center: { x: 3500, y: 1200 },
-    radius: 1100,
+    center: { x: 8750, y: 3000 },
+    radius: 2200,
     resourceType: 'silicrystal',
     enemyTypes: ['scout', 'patrol'],
     enemyCount: 4,
@@ -105,8 +105,8 @@ export const ZONES = {
     name: 'The Strip',
     description: "Maz's Bar & Chop Shop. Neutral ground. Black market upgrades and intel.",
     tier: 2,
-    center: { x: 6200, y: 2800 },
-    radius: 800,
+    center: { x: 15500, y: 7000 },
+    radius: 1600,
     resourceType: 'silicrystal',
     enemyTypes: [],  // neutral zone — no hostiles
     enemyCount: 0,
@@ -126,8 +126,8 @@ export const ZONES = {
     name: 'Titan Ridge',
     description: 'Dense asteroid belt with titanium deposits. Heavy patrol presence.',
     tier: 3,
-    center: { x: 5500, y: 5500 },
-    radius: 1000,
+    center: { x: 13750, y: 13750 },
+    radius: 2000,
     resourceType: 'titan',
     enemyTypes: ['patrol', 'heavy'],
     enemyCount: 5,
@@ -144,8 +144,8 @@ export const ZONES = {
     name: 'Void Reaper Territory',
     description: "The gang's home turf. Maximum security. Krank's flagship has the jump drive.",
     tier: 4,
-    center: { x: 6800, y: 7000 },
-    radius: 900,
+    center: { x: 17000, y: 17500 },
+    radius: 1800,
     resourceType: 'aurum',
     enemyTypes: ['heavy', 'elite'],
     enemyCount: 6,
@@ -179,8 +179,8 @@ export const ASTEROID_FIELDS = {
   freeCenter: {
     name: 'Central Scatter',
     zone: 'free',
-    x: 3800, y: 3600,
-    width: 1200, height: 1200,
+    x: 9500, y: 9000,
+    width: 2400, height: 2400,
     count: 25,
     size: 'small',
     resourceType: 'hydro',
@@ -189,9 +189,9 @@ export const ASTEROID_FIELDS = {
   freeRing: {
     name: 'Station Ring',
     zone: 'free',
-    x: 4000, y: 4000,
-    radius: 1200,
-    innerRadius: 600,
+    x: 10000, y: 10000,
+    radius: 2400,
+    innerRadius: 1200,
     count: 15,
     size: 'small',
     resourceType: 'carbon',
@@ -202,8 +202,8 @@ export const ASTEROID_FIELDS = {
   junkyardDebris: {
     name: 'Junkyard Debris',
     zone: 'junkyard',
-    x: 1600, y: 3000,
-    width: 1600, height: 1400,
+    x: 4000, y: 7500,
+    width: 3200, height: 2800,
     count: 35,
     size: 'mixed',
     resourceType: 'ferro',
@@ -214,8 +214,8 @@ export const ASTEROID_FIELDS = {
   ferroFieldScatter: {
     name: 'Ferro Fields',
     zone: 'ferroFields',
-    x: 2600, y: 5000,
-    width: 1200, height: 1200,
+    x: 6500, y: 12500,
+    width: 2400, height: 2400,
     count: 25,
     size: 'mixed',
     resourceType: 'ferro',
@@ -226,8 +226,8 @@ export const ASTEROID_FIELDS = {
   mineShafts: {
     name: 'Mine Shafts',
     zone: 'miningPlanet',
-    x: 3300, y: 1000,
-    width: 1400, height: 1200,
+    x: 8250, y: 2500,
+    width: 2800, height: 2400,
     count: 30,
     size: 'mixed',
     resourceType: 'silicrystal',
@@ -238,8 +238,8 @@ export const ASTEROID_FIELDS = {
   stripOutskirts: {
     name: 'Strip Outskirts',
     zone: 'theStrip',
-    x: 6000, y: 2600,
-    width: 800, height: 800,
+    x: 15000, y: 6500,
+    width: 1600, height: 1600,
     count: 10,
     size: 'small',
     resourceType: 'ferro',
@@ -250,8 +250,8 @@ export const ASTEROID_FIELDS = {
   titanRidgeField: {
     name: 'Titan Ridge',
     zone: 'titanRidge',
-    x: 5300, y: 5300,
-    width: 1400, height: 1400,
+    x: 13250, y: 13250,
+    width: 2800, height: 2800,
     count: 25,
     size: 'large',
     resourceType: 'titan',
@@ -261,8 +261,8 @@ export const ASTEROID_FIELDS = {
   gangField: {
     name: 'Reaper Rocks',
     zone: 'gangTerritory',
-    x: 6600, y: 6800,
-    width: 1200, height: 1200,
+    x: 16500, y: 17000,
+    width: 2400, height: 2400,
     count: 20,
     size: 'large',
     resourceType: 'aurum',
@@ -275,7 +275,7 @@ export const ASTEROID_FIELDS = {
 export const FIXED_STATIONS = [
   {
     id: 'station_central',
-    x: 4000, y: 4000,
+    x: 10000, y: 10000,
     type: 'trading',
     name: "Uncle Ricky's Trading Post",
     zone: 'free',
@@ -283,7 +283,7 @@ export const FIXED_STATIONS = [
   },
   {
     id: 'station_junkyard',
-    x: 1800, y: 3400,
+    x: 4500, y: 8500,
     type: 'salvage',
     name: "Rusty's Salvage Yard",
     zone: 'junkyard',
@@ -293,7 +293,7 @@ export const FIXED_STATIONS = [
   },
   {
     id: 'station_mining',
-    x: 3500, y: 1400,
+    x: 8750, y: 3500,
     type: 'mining',
     name: 'DeepCore Mining Op',
     zone: 'miningPlanet',
@@ -303,7 +303,7 @@ export const FIXED_STATIONS = [
   },
   {
     id: 'station_strip',
-    x: 6200, y: 2800,
+    x: 15500, y: 7000,
     type: 'bar',
     name: "Maz's Bar & Chop Shop",
     zone: 'theStrip',
@@ -313,7 +313,7 @@ export const FIXED_STATIONS = [
   },
   {
     id: 'station_gang',
-    x: 7000, y: 7200,
+    x: 17500, y: 18000,
     type: 'gang_hq',
     name: 'Void Reaper HQ',
     zone: 'gangTerritory',

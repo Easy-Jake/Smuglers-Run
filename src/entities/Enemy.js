@@ -1,5 +1,6 @@
 import { Entity } from './Entity.js';
 import { Projectile } from './Projectile.js';
+import { GAME_CONFIG } from '../config/gameConfig.js';
 
 /**
  * AI Enemy Ship — patrols asteroid fields, attacks player on sight
@@ -151,8 +152,8 @@ export class Enemy extends Entity {
     this.vy *= 0.98;
 
     // World bounds
-    this.x = Math.max(0, Math.min(8000, this.x));
-    this.y = Math.max(0, Math.min(8000, this.y));
+    this.x = Math.max(0, Math.min(GAME_CONFIG.WORLD.WIDTH, this.x));
+    this.y = Math.max(0, Math.min(GAME_CONFIG.WORLD.HEIGHT, this.y));
   }
 
   _patrol(deltaTime) {

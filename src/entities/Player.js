@@ -240,7 +240,7 @@ export class Player extends Entity {
     this.projectileDamage = GAME_CONFIG.PROJECTILES.DAMAGE * (1 + (this.blasterDamageLevel - 1) * 0.25);
   }
 
-  upgradeCargoCapacity() { this.cargoCapacityLevel++; this.cargoCapacity += 50; }
+  upgradeCargoCapacity() { this.cargoCapacityLevel++; this.cargoCapacity += 20; }
   upgradeThrustEfficiency() { this.thrustEfficiencyLevel++; this.recalculateCosts(); }
   upgradeAmmoEfficiency() { this.ammoEfficiencyLevel++; this.recalculateCosts(); }
   upgradeSpeed() { this.speedLevel++; this.maxSpeed += 1; this.recalculateCosts(); }

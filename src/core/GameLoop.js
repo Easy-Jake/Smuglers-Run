@@ -3,8 +3,9 @@ import { PerformanceMonitor } from '../utils/PerformanceMonitor.js';
 import { PerformanceOptimizer } from '../utils/PerformanceOptimizer.js';
 import { EventTypes } from '../ecs/events/EventTypes.js';
 import { CollisionHandler } from './CollisionHandler.js';
-import { ZONES } from '../config/mapLayout.js';
+import { ZONES, RESOURCE_TYPES } from '../config/mapLayout.js';
 import { startMusic, toggleMute } from '../audio/SoundEngine.js';
+import * as TradingConfig from '../config/tradingConfig.js';
 
 /**
  * Manages the main game loop with fixed timestep
@@ -576,8 +577,8 @@ export class GameLoop {
     const mapSize = 150;
     const mx = width - mapSize - 10;
     const my = 130; // below Map Exploration widget
-    const worldW = 8000;
-    const worldH = 8000;
+    const worldW = GAME_CONFIG.WORLD.WIDTH;
+    const worldH = GAME_CONFIG.WORLD.HEIGHT;
     const scaleX = mapSize / worldW;
     const scaleY = mapSize / worldH;
 
@@ -787,6 +788,7 @@ export class GameLoop {
 
   /**
    * Render the trading interface on canvas
+   * Uses dynamic upgrade formulas from tradingConfig.js
    * @private
    */
   renderTradingUI(ctx, width, height) {
@@ -794,143 +796,206 @@ export class GameLoop {
     const station = this.gameState.currentStation;
     if (!player || !station) return;
 
-    const panelW = 500;
-    const panelH = 400;
+    const TC = TradingConfig;
+    const RT = RESOURCE_TYPES;
+
+    const panelW = 560;
+    const panelH = 520;
     const px = (width - panelW) / 2;
     const py = (height - panelH) / 2;
 
     // Panel background
-    ctx.fillStyle = 'rgba(0, 0, 20, 0.9)';
+    ctx.fillStyle = 'rgba(0, 0, 20, 0.92)';
     ctx.fillRect(px, py, panelW, panelH);
     ctx.strokeStyle = '#4af';
     ctx.lineWidth = 2;
     ctx.strokeRect(px, py, panelW, panelH);
 
-    // Header
+    // Header — station name
     ctx.fillStyle = '#0ff';
-    ctx.font = 'bold 18px Arial';
+    ctx.font = 'bold 16px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('TRADING STATION', px + panelW / 2, py + 30);
+    ctx.fillText(station.stationName || 'Trading Station', px + panelW / 2, py + 25);
+    ctx.font = '10px Arial';
+    ctx.fillStyle = '#4af';
+    ctx.fillText(station.stationType?.replace('_', ' ').toUpperCase() || '', px + panelW / 2, py + 40);
 
-    // Player stats
-    ctx.font = '13px Arial';
+    // Player stats bar
+    ctx.font = '12px Arial';
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(`Credits: ${player.credits}`, px + 20, py + 60);
-    ctx.fillText(`Cargo: ${player.resources}/${player.cargoCapacity}`, px + 200, py + 60);
-    ctx.fillText(`Energy: ${Math.floor(player.energy)}/${player.maxEnergy}`, px + 350, py + 60);
+    ctx.fillStyle = '#ff0';
+    ctx.fillText(`💰 ${player.credits}`, px + 15, py + 60);
+    ctx.fillStyle = '#4f4';
+    ctx.fillText(`⚡ ${Math.floor(player.energy)}/${player.maxEnergy}`, px + 130, py + 60);
+    ctx.fillStyle = '#8bf';
+    ctx.fillText(`📦 ${player.resources}/${player.cargoCapacity}`, px + 280, py + 60);
+    ctx.fillStyle = '#f88';
+    ctx.fillText(`❤️ ${Math.floor(player.health)}`, px + 420, py + 60);
 
     // Divider
-    ctx.strokeStyle = '#4af';
+    ctx.strokeStyle = '#335';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(px + 20, py + 75);
-    ctx.lineTo(px + panelW - 20, py + 75);
+    ctx.moveTo(px + 15, py + 70);
+    ctx.lineTo(px + panelW - 15, py + 70);
     ctx.stroke();
 
-    // Store trading button info for click handling
-    if (!this._tradeButtons) this._tradeButtons = [];
+    // Reset trade buttons
     this._tradeButtons = [];
 
-    let yOff = py + 95;
+    let y = py + 88;
 
-    // Sell resources section
-    ctx.fillStyle = '#8bf';
-    ctx.font = 'bold 14px Arial';
-    ctx.fillText('SELL RESOURCES', px + 20, yOff);
-    yOff += 25;
+    // === SELL RESOURCES ===
+    ctx.fillStyle = '#4a4';
+    ctx.font = 'bold 13px Arial';
+    ctx.fillText('SELL CARGO', px + 15, y);
 
-    ctx.font = '13px Arial';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(`Sell price: ${station.prices.sell} credits each`, px + 30, yOff);
+    if (player.resources > 0) {
+      // Calculate sell value based on average resource value (simplified)
+      const sellPrice = TC.PRICES.RESOURCE_BUY; // station buys at this price
+      const totalValue = player.resources * sellPrice;
+      ctx.font = '11px Arial';
+      ctx.fillStyle = '#aaa';
+      ctx.fillText(`${player.resources} units @ ${sellPrice}cr = ${totalValue}cr`, px + 130, y);
 
-    // Sell button
-    this._drawTradeButton(ctx, px + 350, yOff - 15, 120, 25, 'SELL ALL', '#4a4', () => {
-      if (player.resources > 0) {
-        const earned = player.resources * station.prices.sell;
-        player.credits += earned;
-        this.gameState.score += earned;
+      this._drawTradeButton(ctx, px + panelW - 135, y - 13, 120, 22, `SELL ALL (+${totalValue})`, '#3a3', () => {
+        player.credits += totalValue;
+        this.gameState.score += totalValue;
         player.resources = 0;
-      }
-    });
-    yOff += 35;
+        import('../audio/SoundEngine.js').then(m => m.playSFX('dock'));
+      });
+    } else {
+      ctx.font = '11px Arial';
+      ctx.fillStyle = '#666';
+      ctx.fillText('No cargo to sell', px + 130, y);
+    }
+    y += 30;
 
-    // Buy resources section
-    ctx.fillStyle = '#8bf';
-    ctx.font = 'bold 14px Arial';
-    ctx.fillText('BUY RESOURCES', px + 20, yOff);
-    yOff += 25;
-
-    ctx.font = '13px Arial';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(`Buy price: ${station.prices.buy} credits each`, px + 30, yOff);
-
-    this._drawTradeButton(ctx, px + 350, yOff - 15, 120, 25, 'BUY x10', '#44a', () => {
-      const cost = station.prices.buy * 10;
-      const space = player.cargoCapacity - player.resources;
-      const canBuy = Math.min(10, space, Math.floor(player.credits / station.prices.buy));
-      if (canBuy > 0) {
-        player.credits -= canBuy * station.prices.buy;
-        player.resources += canBuy;
-      }
-    });
-    yOff += 40;
-
-    // Energy section
+    // === ENERGY REFUEL ===
     ctx.fillStyle = '#4af';
-    ctx.font = 'bold 14px Arial';
-    ctx.fillText('ENERGY', px + 20, yOff);
-    yOff += 25;
+    ctx.font = 'bold 13px Arial';
+    ctx.fillText('REFUEL ENERGY', px + 15, y);
 
-    const ec = GAME_CONFIG.TRADING.ENERGY_CELL;
-    ctx.font = '13px Arial';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(`Energy Cell: +${ec.AMOUNT} energy for ${ec.COST} credits`, px + 30, yOff);
+    const cellCost = TC.PRICES.ENERGY_CELL;
+    const cellAmount = TC.PRICES.ENERGY_AMOUNT;
+    const canRefuel = player.energy < player.maxEnergy && player.credits >= cellCost;
+    ctx.font = '11px Arial';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(`+${cellAmount} energy for ${cellCost}cr`, px + 150, y);
 
-    this._drawTradeButton(ctx, px + 350, yOff - 15, 120, 25, 'BUY', '#448', () => {
-      if (player.credits >= ec.COST) {
-        player.credits -= ec.COST;
-        player.refuelEnergy(ec.AMOUNT);
-      }
-    });
-    yOff += 40;
+    this._drawTradeButton(ctx, px + panelW - 135, y - 13, 120, 22,
+      canRefuel ? 'REFUEL' : (player.energy >= player.maxEnergy ? 'FULL' : 'NO CREDITS'),
+      canRefuel ? '#448' : '#333', () => {
+        if (canRefuel) {
+          player.credits -= cellCost;
+          player.energy = Math.min(player.maxEnergy, player.energy + cellAmount);
+          import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
+        }
+      });
+    y += 30;
 
-    // Upgrades section
+    // === REPAIR ===
+    if (player.health < player.maxHealth) {
+      ctx.fillStyle = '#f44';
+      ctx.font = 'bold 13px Arial';
+      ctx.fillText('REPAIR HULL', px + 15, y);
+      const repairCost = Math.ceil((player.maxHealth - player.health) * 2);
+      ctx.font = '11px Arial';
+      ctx.fillStyle = '#aaa';
+      ctx.fillText(`Full repair: ${repairCost}cr`, px + 150, y);
+
+      this._drawTradeButton(ctx, px + panelW - 135, y - 13, 120, 22, 'REPAIR', '#a33', () => {
+        if (player.credits >= repairCost) {
+          player.credits -= repairCost;
+          player.health = player.maxHealth;
+          import('../audio/SoundEngine.js').then(m => m.playSFX('dock'));
+        }
+      });
+      y += 30;
+    }
+
+    // === UPGRADES ===
+    ctx.strokeStyle = '#335';
+    ctx.beginPath();
+    ctx.moveTo(px + 15, y - 5);
+    ctx.lineTo(px + panelW - 15, y - 5);
+    ctx.stroke();
+
     ctx.fillStyle = '#fa4';
-    ctx.font = 'bold 14px Arial';
-    ctx.fillText('UPGRADES', px + 20, yOff);
-    yOff += 5;
+    ctx.font = 'bold 13px Arial';
+    ctx.fillText('UPGRADES', px + 15, y + 10);
+    y += 25;
 
+    // Two columns of upgrades
     const upgrades = [
-      { name: 'Cargo +50', level: player.cargoCapacityLevel, cfg: GAME_CONFIG.TRADING.UPGRADES.CAPACITY, fn: () => player.upgradeCargoCapacity() },
-      { name: 'Thrust Eff.', level: player.thrustEfficiencyLevel, cfg: GAME_CONFIG.TRADING.UPGRADES.THRUST_EFFICIENCY, fn: () => player.upgradeThrustEfficiency() },
-      { name: 'Speed', level: player.speedLevel, cfg: GAME_CONFIG.TRADING.UPGRADES.SPEED, fn: () => player.upgradeSpeed() },
-      { name: 'Blaster Dmg', level: player.blasterDamageLevel, cfg: GAME_CONFIG.TRADING.UPGRADES.BLASTER_DAMAGE, fn: () => player.upgradeBlasterDamage() },
-      { name: 'Pickup Range', level: player.resourceRangeLevel, cfg: GAME_CONFIG.TRADING.UPGRADES.RESOURCE_RANGE, fn: () => player.upgradeResourceRange() },
+      { name: 'Cargo Hold', desc: '+20 capacity', id: 'CARGO', level: player.cargoCapacityLevel, fn: () => player.upgradeCargoCapacity(), effect: 'MOD' },
+      { name: 'Thrust Eff.', desc: 'Less energy/thrust', id: 'THRUST_EFFICIENCY', level: player.thrustEfficiencyLevel, fn: () => player.upgradeThrustEfficiency(), effect: 'EFF' },
+      { name: 'Ammo Eff.', desc: 'Less energy/shot', id: 'AMMO_EFFICIENCY', level: player.ammoEfficiencyLevel, fn: () => player.upgradeAmmoEfficiency(), effect: 'EFF' },
+      { name: 'Speed', desc: '+1 max speed', id: 'SPEED', level: player.speedLevel, fn: () => player.upgradeSpeed(), effect: 'PWR' },
+      { name: 'Pickup Range', desc: '+20% radius', id: 'RESOURCE_RANGE', level: player.resourceRangeLevel, fn: () => player.upgradeResourceRange(), effect: 'MOD' },
+      { name: 'Blaster Dmg', desc: '+25% damage', id: 'BLASTER_DAMAGE', level: player.blasterDamageLevel, fn: () => player.upgradeBlasterDamage(), effect: 'PWR' },
+      { name: 'Energy Tank', desc: '+25 max energy', id: 'CAPACITY', level: player.energyCapacityLevel || 1, fn: () => player.upgradeEnergyCapacity(), effect: 'MOD' },
     ];
 
-    for (const upg of upgrades) {
-      yOff += 22;
-      const cost = Math.floor(upg.cfg.BASE_COST * (upg.level + (upg.cfg.DEGRADATION_FACTOR || 0.1) * upg.level * upg.level));
-      ctx.font = '12px Arial';
-      ctx.fillStyle = '#fff';
-      ctx.fillText(`${upg.name} (Lv${upg.level})`, px + 30, yOff);
-      ctx.fillStyle = '#aaa';
-      ctx.fillText(`${cost}cr`, px + 250, yOff);
+    const colW = (panelW - 40) / 2;
+    for (let i = 0; i < upgrades.length; i++) {
+      const upg = upgrades[i];
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const ux = px + 15 + col * (colW + 10);
+      const uy = y + row * 42;
 
-      this._drawTradeButton(ctx, px + 350, yOff - 13, 120, 20, 'UPGRADE', '#654', () => {
-        if (player.credits >= cost) {
-          player.credits -= cost;
-          upg.fn();
+      const cost = TC.getUpgradeCost(upg.id, upg.level);
+      const canAfford = player.credits >= cost;
+
+      // Upgrade card background
+      ctx.fillStyle = canAfford ? 'rgba(40, 40, 60, 0.8)' : 'rgba(30, 30, 40, 0.5)';
+      ctx.fillRect(ux, uy, colW, 36);
+      ctx.strokeStyle = canAfford ? '#556' : '#333';
+      ctx.strokeRect(ux, uy, colW, 36);
+
+      // Effect type badge
+      const badgeColors = { PWR: '#f44', EFF: '#4f4', MOD: '#44f' };
+      ctx.fillStyle = badgeColors[upg.effect] || '#888';
+      ctx.font = 'bold 8px Arial';
+      ctx.fillText(upg.effect, ux + 4, uy + 11);
+
+      // Name + level
+      ctx.fillStyle = canAfford ? '#fff' : '#666';
+      ctx.font = '11px Arial';
+      ctx.fillText(`${upg.name} Lv${upg.level}`, ux + 30, uy + 13);
+
+      // Description
+      ctx.fillStyle = '#888';
+      ctx.font = '9px Arial';
+      ctx.fillText(upg.desc, ux + 30, uy + 25);
+
+      // Cost + button
+      ctx.fillStyle = canAfford ? '#ff0' : '#664';
+      ctx.font = '10px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${cost}cr`, ux + colW - 5, uy + 13);
+      ctx.textAlign = 'left';
+
+      // Click area for the whole card
+      this._tradeButtons.push({
+        x: ux, y: uy, w: colW, h: 36,
+        onClick: () => {
+          if (player.credits >= cost) {
+            player.credits -= cost;
+            upg.fn();
+            import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
+          }
         }
       });
     }
 
     // Close instructions
-    ctx.fillStyle = '#888';
-    ctx.font = '12px Arial';
+    y += Math.ceil(upgrades.length / 2) * 42 + 15;
+    ctx.fillStyle = '#555';
+    ctx.font = '11px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('Press ESC or E to undock', px + panelW / 2, py + panelH - 15);
+    ctx.fillText('Press ESC or E to undock', px + panelW / 2, py + panelH - 12);
     ctx.textAlign = 'left';
   }
 

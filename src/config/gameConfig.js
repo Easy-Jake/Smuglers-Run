@@ -3,31 +3,31 @@ export const GAME_CONFIG = {
   maxDeltaTime: 100,
 
   WORLD: {
-    WIDTH: 8000,
-    HEIGHT: 8000,
-    SIZE: 8000, // kept for backward compat
-    GRID_SIZE: 100,
-    STAR_COUNT: 1000,
+    WIDTH: 20000,
+    HEIGHT: 20000,
+    SIZE: 20000, // kept for backward compat
+    GRID_SIZE: 200,
+    STAR_COUNT: 3000,
   },
 
   PLAYER: {
-    STARTING_CREDITS: 100,
+    STARTING_CREDITS: 50,       // barely enough for a couple energy cells
     STARTING_HEALTH: 100,
-    STARTING_ENERGY: 500,
-    STARTING_FUEL: 500, // alias for energy
-    INITIAL_CARGO_CAPACITY: 50,
+    STARTING_ENERGY: 100,       // tight cap — every thrust counts
+    STARTING_FUEL: 100,         // alias
+    INITIAL_CARGO_CAPACITY: 20, // tiny hold on uncle's junker
     RADIUS: 20,
-    SPEED: 2.0,
-    ROTATION_SPEED: 0.1,
-    THRUST_POWER: 0.2,
-    ACCELERATION: 0.2,
+    SPEED: 1.2,                 // slow junker — upgrades make it faster
+    ROTATION_SPEED: 0.08,       // sluggish rotation
+    THRUST_POWER: 0.12,         // weak thrust — momentum builds slow but gets scary
+    ACCELERATION: 0.12,
     FRICTION: 0.99,
-    MAX_SPEED: 10,
+    MAX_SPEED: 5,               // low cap — feels dangerous when maxed
     MAX_HEALTH: 100,
     MAX_AMMO: 100,
     ENERGY_COST: {
-      THRUST: 0.1,
-      SHOT: 5,
+      THRUST: 0.15,             // costs more per thrust — energy management matters
+      SHOT: 8,                  // expensive shots — can't spam
       SPEED_MULTIPLIER: 0.15,
       DAMAGE_MULTIPLIER: 0.2,
     },
