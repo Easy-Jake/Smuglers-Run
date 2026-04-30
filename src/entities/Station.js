@@ -4,15 +4,22 @@ import { Entity } from './Entity.js';
 const SC = GAME_CONFIG.STATION;
 
 export class Station extends Entity {
-  constructor(x, y, type = 'trading') {
+  constructor(x, y, type = 'trading', config = {}) {
     super(x, y);
-    this.stationType = type; // 'trading', 'military', etc.
+    this.stationType = type; // 'trading', 'salvage', 'mining', 'bar', 'gang_hq'
     this.type = 'station';  // entity type for collision system
     this.radius = SC.RADIUS;
     this.width = SC.RADIUS * 2;
     this.height = SC.RADIUS * 2;
     this.active = true;
     this.rotation = 0;
+
+    // Station identity
+    this.stationId = config.id || 'station_unknown';
+    this.stationName = config.name || 'Unknown Station';
+    this.locked = config.locked || false;
+    this.unlockRequirement = config.unlockRequirement || null;
+    this.reward = config.reward || null;
 
     // Docking zones
     this.dockingRadius = SC.DOCKING_RADIUS;
@@ -92,6 +99,12 @@ export class Station extends Entity {
     this.shipApproaching = dist < this.approachRadius;
     this.shipInDockingZone = dist < this.dockingRadius;
     this.shipTooFast = speed > this.maxDockingSpeed;
+
+    // Can't dock at locked stations
+    if (this.locked) {
+      this.dockingRequested = false;
+      return false;
+    }
 
     if (!this.shipInDockingZone) {
       this.dockingSequenceActive = false;
@@ -176,39 +189,71 @@ export class Station extends Entity {
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rotation);
 
+    // Locked stations are dimmed
+    if (this.locked) {
+      ctx.globalAlpha = 0.4;
+    }
+
     if (this.image) {
       const size = this.radius * 2.5;
       ctx.drawImage(this.image, -size / 2, -size / 2, size, size);
     } else {
-      // Fallback procedural
-      ctx.fillStyle = '#5588aa';
+      // Fallback procedural — color varies by type
+      const typeColors = {
+        trading: { fill: '#5588aa', stroke: '#88ccff', inner: '#336688', ports: '#88ccff' },
+        salvage: { fill: '#887744', stroke: '#bbaa66', inner: '#665533', ports: '#ccbb77' },
+        mining:  { fill: '#668844', stroke: '#88bb66', inner: '#446633', ports: '#aadd88' },
+        bar:     { fill: '#885588', stroke: '#bb88bb', inner: '#664466', ports: '#dd99dd' },
+        gang_hq: { fill: '#884444', stroke: '#bb6666', inner: '#663333', ports: '#dd8888' },
+      };
+      const c = typeColors[this.stationType] || typeColors.trading;
+
+      ctx.fillStyle = c.fill;
       ctx.beginPath();
       ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#88ccff';
+      ctx.strokeStyle = c.stroke;
       ctx.lineWidth = 5;
       ctx.beginPath();
       ctx.arc(0, 0, this.radius * 0.9, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.fillStyle = '#336688';
+      ctx.fillStyle = c.inner;
       ctx.beginPath();
       ctx.arc(0, 0, this.radius * 0.6, 0, Math.PI * 2);
       ctx.fill();
       // Docking ports
       for (let i = 0; i < 4; i++) {
         const a = (i / 4) * Math.PI * 2;
-        ctx.fillStyle = '#88ccff';
+        ctx.fillStyle = c.ports;
         ctx.beginPath();
         ctx.arc(Math.cos(a) * this.radius * 0.7, Math.sin(a) * this.radius * 0.7, this.radius * 0.15, 0, Math.PI * 2);
         ctx.fill();
       }
     }
+
+    ctx.globalAlpha = 1;
     ctx.restore();
 
-    // Label
-    ctx.fillStyle = '#0ff';
-    ctx.font = '12px Arial';
+    // Lock icon for locked stations
+    if (this.locked) {
+      ctx.fillStyle = '#f44';
+      ctx.font = "bold 18px Arial";
+      ctx.textAlign = 'center';
+      ctx.fillText('🔒', this.x, this.y + 6);
+    }
+
+    // Station name label
+    const labelColor = this.locked ? '#666' : '#0ff';
+    ctx.fillStyle = labelColor;
+    ctx.font = '11px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('Trading Station', this.x, this.y + this.radius + 20);
+    ctx.fillText(this.stationName, this.x, this.y + this.radius + 20);
+
+    // Type subtitle
+    if (!this.locked) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.font = '9px Arial';
+      ctx.fillText(this.stationType.replace('_', ' ').toUpperCase(), this.x, this.y + this.radius + 33);
+    }
   }
 }

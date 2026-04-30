@@ -18,7 +18,8 @@ export class GameLoop {
   constructor(services, gameState) {
     this.services = services;
     this.gameState = gameState;
-    
+    gameState._gameLoop = this; // back-reference for screen shake
+
     // Timing variables
     this.lastTime = 0;
     this.accumulator = 0;
@@ -369,8 +370,18 @@ export class GameLoop {
 
       const cam = this.gameState.camera;
 
+      // Screen shake
+      if (!this._shakeIntensity) this._shakeIntensity = 0;
+      if (this._shakeIntensity > 0.1) {
+        this._shakeIntensity *= 0.9; // decay
+      } else {
+        this._shakeIntensity = 0;
+      }
+
       ctx.save();
-      ctx.translate(-cam.x, -cam.y);
+      const shakeX = this._shakeIntensity ? (Math.random() - 0.5) * this._shakeIntensity : 0;
+      const shakeY = this._shakeIntensity ? (Math.random() - 0.5) * this._shakeIntensity : 0;
+      ctx.translate(-cam.x + shakeX, -cam.y + shakeY);
 
       // Draw stars
       ctx.fillStyle = '#ffffff';
@@ -476,27 +487,45 @@ export class GameLoop {
     if (!player || player.isDocked) return;
 
     for (const station of this.gameState.stations) {
-      if (station.shipInDockingZone && !station.shipTooFast) {
+      const name = station.stationName || 'Station';
+
+      if (station.locked && station.shipApproaching) {
+        // Locked station — show lock message
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(width / 2 - 160, height - 70, 320, 50);
+        ctx.fillStyle = '#f44';
+        ctx.font = "bold 13px Arial";
+        ctx.textAlign = 'center';
+        ctx.fillText(`🔒 ${name}`, width / 2, height - 50);
+        ctx.fillStyle = '#a88';
+        ctx.font = '11px Arial';
+        const req = station.unlockRequirement;
+        ctx.fillText(req ? `Requires: ${req.replace('_', ' ')}` : 'LOCKED', width / 2, height - 33);
+      } else if (station.shipInDockingZone && !station.shipTooFast && !station.locked) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(width / 2 - 120, height - 60, 240, 35);
+        ctx.fillRect(width / 2 - 140, height - 65, 280, 45);
         ctx.fillStyle = '#7f7';
-        ctx.font = '14px Arial';
+        ctx.font = 'bold 13px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('Press E to Dock', width / 2, height - 38);
-      } else if (station.shipInDockingZone && station.shipTooFast) {
+        ctx.fillText(name, width / 2, height - 46);
+        ctx.font = '12px Arial';
+        ctx.fillText('Press E to Dock', width / 2, height - 28);
+      } else if (station.shipInDockingZone && station.shipTooFast && !station.locked) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(width / 2 - 120, height - 60, 240, 35);
+        ctx.fillRect(width / 2 - 140, height - 65, 280, 45);
         ctx.fillStyle = '#f77';
-        ctx.font = '14px Arial';
+        ctx.font = 'bold 13px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('Too Fast to Dock — Slow Down', width / 2, height - 38);
-      } else if (station.shipApproaching) {
+        ctx.fillText(name, width / 2, height - 46);
+        ctx.font = '12px Arial';
+        ctx.fillText('Too Fast — Slow Down', width / 2, height - 28);
+      } else if (station.shipApproaching && !station.locked) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-        ctx.fillRect(width / 2 - 100, height - 50, 200, 30);
+        ctx.fillRect(width / 2 - 120, height - 55, 240, 35);
         ctx.fillStyle = '#4af';
         ctx.font = '12px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText('Approaching Station', width / 2, height - 30);
+        ctx.fillText(`Approaching ${name}`, width / 2, height - 33);
       }
     }
   }

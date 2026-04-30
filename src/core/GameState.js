@@ -93,9 +93,9 @@ export class GameState {
   }
 
   _generateWorld() {
-    // Spawn stations from map layout
+    // Spawn all stations from map layout
     for (const stationDef of FIXED_STATIONS) {
-      const station = new Station(stationDef.x, stationDef.y, stationDef.type);
+      const station = new Station(stationDef.x, stationDef.y, stationDef.type, stationDef);
       this.stations.push(station);
     }
 

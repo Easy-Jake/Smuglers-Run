@@ -315,6 +315,11 @@ export class CollisionHandler {
     player.takeDamage(damage, this.gameState);
     playSFX('hit');
 
+    // Screen shake proportional to damage
+    if (this.gameState._gameLoop) {
+      this.gameState._gameLoop._shakeIntensity = Math.min(20, damage * 2);
+    }
+
     // Bounce player away from asteroid
     const dx = player.x - asteroid.x;
     const dy = player.y - asteroid.y;
@@ -396,6 +401,10 @@ export class CollisionHandler {
   handleEnemyProjectilePlayerCollision(projectile, player) {
     if (player.invulnerable) return;
     player.takeDamage(projectile.damage, this.gameState);
+    playSFX('hit');
+    if (this.gameState._gameLoop) {
+      this.gameState._gameLoop._shakeIntensity = Math.min(15, projectile.damage * 1.5);
+    }
 
     this.eventSystem.emit(EventTypes.COLLISION, {
       type: 'enemy_projectile_player',
