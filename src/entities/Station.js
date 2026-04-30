@@ -125,18 +125,34 @@ export class Station extends Entity {
       const nx = dx / (dist || 1);
       const ny = dy / (dist || 1);
 
-      // Dampen velocity and pull toward station
+      // Progressive pull — stronger as ship gets closer
+      const pullStrength = this.magneticForce * (1 + (1 - dist / this.dockingRadius) * 2);
+
+      // Dampen velocity aggressively and pull toward station
       if (ship.velocity) {
         ship.velocity = new ship.velocity.constructor(
-          ship.velocity.x * 0.95 + nx * this.magneticForce,
-          ship.velocity.y * 0.95 + ny * this.magneticForce
+          ship.velocity.x * 0.93 + nx * pullStrength,
+          ship.velocity.y * 0.93 + ny * pullStrength
         );
       }
+
+      // Auto-rotate ship to face station
+      const targetAngle = Math.atan2(dy, dx);
+      let angleDiff = targetAngle - ship.rotation;
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      ship.rotation += angleDiff * 0.05;
+      ship.angle = ship.rotation;
+
+      // Store beam data for rendering
+      this._beamActive = true;
+      this._beamTarget = { x: ship.x, y: ship.y };
 
       if (dist < 20 && speed < 0.3) {
         ship.x = this.x;
         ship.y = this.y;
         this.dockingSequenceActive = false;
+        this._beamActive = false;
         this.lastDockingAttempt = Date.now();
         return true;
       }
@@ -182,6 +198,28 @@ export class Station extends Entity {
       ctx.arc(this.x, this.y, this.dockingRadius, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
+    }
+
+    // Tractor beam visual
+    if (this._beamActive && this._beamTarget) {
+      ctx.save();
+      const pulse = 0.3 + Math.sin(Date.now() / 100) * 0.2;
+      ctx.strokeStyle = `rgba(100, 255, 200, ${pulse})`;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 4]);
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(this._beamTarget.x, this._beamTarget.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Glow at ship end
+      ctx.fillStyle = `rgba(100, 255, 200, ${pulse * 0.5})`;
+      ctx.beginPath();
+      ctx.arc(this._beamTarget.x, this._beamTarget.y, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    } else {
+      this._beamActive = false;
     }
 
     // Station body

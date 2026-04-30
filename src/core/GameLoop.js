@@ -253,6 +253,20 @@ export class GameLoop {
     }
     if (!im.isKeyPressed('Escape')) this._escHeld = false;
 
+    // Tab key — full map toggle
+    if (im.isKeyPressed('Tab') && !this._tabHeld) {
+      this._tabHeld = true;
+      this._showFullMap = !this._showFullMap;
+    }
+    if (!im.isKeyPressed('Tab')) this._tabHeld = false;
+
+    // D key — debug overlay toggle
+    if (im.isKeyPressed('d') && !this._dHeld && !this.gameState.tradingActive) {
+      this._dHeld = true;
+      this._showDebug = !this._showDebug;
+    }
+    if (!im.isKeyPressed('d') && !im.isKeyPressed('D')) this._dHeld = false;
+
     if (this.gameState.isPaused) return;
 
     // If trading UI is open, block game input
@@ -446,6 +460,16 @@ export class GameLoop {
       // Draw power system HUD (bottom-right)
       if (this.gameState.player?.powerSystem) {
         this._renderPowerHUD(ctx, width, height);
+      }
+
+      // Full map overlay (Tab)
+      if (this._showFullMap) {
+        this._renderFullMap(ctx, width, height);
+      }
+
+      // Debug overlay (D)
+      if (this._showDebug) {
+        this._renderDebug(ctx, width, height);
       }
     } catch (error) {
       console.error('GameLoop: Error during rendering:', error);
@@ -779,6 +803,147 @@ export class GameLoop {
    * Close trading UI
    * @private
    */
+  /**
+   * Render full-screen map overlay (Tab key)
+   */
+  _renderFullMap(ctx, width, height) {
+    const gs = this.gameState;
+    const p = gs.player;
+    if (!p) return;
+
+    // Darken background
+    ctx.fillStyle = 'rgba(0, 0, 10, 0.85)';
+    ctx.fillRect(0, 0, width, height);
+
+    const padding = 40;
+    const mapW = width - padding * 2;
+    const mapH = height - padding * 2;
+    const worldW = GAME_CONFIG.WORLD.WIDTH;
+    const worldH = GAME_CONFIG.WORLD.HEIGHT;
+    const scale = Math.min(mapW / worldW, mapH / worldH);
+    const ox = (width - worldW * scale) / 2;
+    const oy = (height - worldH * scale) / 2;
+
+    // Map border
+    ctx.strokeStyle = '#335';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(ox, oy, worldW * scale, worldH * scale);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+    ctx.lineWidth = 1;
+    for (let g = 2000; g < worldW; g += 2000) {
+      ctx.beginPath(); ctx.moveTo(ox + g * scale, oy); ctx.lineTo(ox + g * scale, oy + worldH * scale); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ox, oy + g * scale); ctx.lineTo(ox + worldW * scale, oy + g * scale); ctx.stroke();
+    }
+
+    // Zone circles with labels
+    const zoneColors = { 0: '#0f04', 1: '#ff04', 2: '#f804', 3: '#f004', 4: '#80f4' };
+    for (const [, zone] of Object.entries(ZONES)) {
+      const zx = ox + zone.center.x * scale;
+      const zy = oy + zone.center.y * scale;
+      const zr = zone.radius * scale;
+
+      // Fill
+      ctx.fillStyle = zoneColors[zone.tier] || '#fff1';
+      ctx.beginPath();
+      ctx.arc(zx, zy, zr, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Border
+      ctx.strokeStyle = zoneColors[zone.tier]?.replace('4', '8') || '#fff3';
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Label
+      ctx.fillStyle = '#fff';
+      ctx.font = '10px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(zone.name, zx, zy - zr - 5);
+    }
+
+    // Asteroids
+    ctx.fillStyle = 'rgba(150, 130, 100, 0.3)';
+    for (const a of gs.asteroids) {
+      if (!a.active) continue;
+      ctx.fillRect(ox + a.x * scale - 1, oy + a.y * scale - 1, 2, 2);
+    }
+
+    // Stations
+    for (const s of gs.stations) {
+      const sx = ox + s.x * scale;
+      const sy = oy + s.y * scale;
+      ctx.fillStyle = s.locked ? '#666' : '#0ff';
+      ctx.fillRect(sx - 4, sy - 4, 8, 8);
+      ctx.fillStyle = s.locked ? '#555' : '#0ff';
+      ctx.font = '9px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(s.stationName, sx, sy + 12);
+    }
+
+    // Enemies
+    for (const e of (gs.enemies || [])) {
+      if (!e.active) continue;
+      ctx.fillStyle = e.state === 'chase' || e.state === 'attack' ? '#f00' : '#a44';
+      ctx.fillRect(ox + e.x * scale - 2, oy + e.y * scale - 2, 4, 4);
+    }
+
+    // Player
+    const px = ox + p.x * scale;
+    const py = oy + p.y * scale;
+    ctx.fillStyle = '#0f0';
+    ctx.beginPath();
+    ctx.arc(px, py, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0f0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(px + Math.cos(p.rotation) * 12, py + Math.sin(p.rotation) * 12);
+    ctx.stroke();
+
+    // Title
+    ctx.fillStyle = '#4af';
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('SYSTEM MAP — Press Tab to close', width / 2, 25);
+    ctx.textAlign = 'left';
+  }
+
+  /**
+   * Render debug overlay (D key)
+   */
+  _renderDebug(ctx, width, height) {
+    const gs = this.gameState;
+    const p = gs.player;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(10, height - 200, 280, 190);
+    ctx.strokeStyle = '#555';
+    ctx.strokeRect(10, height - 200, 280, 190);
+
+    ctx.fillStyle = '#0f0';
+    ctx.font = '11px monospace';
+    let y = height - 185;
+    const line = (text) => { ctx.fillText(text, 20, y); y += 16; };
+
+    line(`FPS: ${Math.round(1000 / (this.timeStep || 16.67))}`);
+    line(`Pos: ${Math.round(p?.x || 0)}, ${Math.round(p?.y || 0)}`);
+    line(`Vel: ${p?.velocity ? p.velocity.x.toFixed(2) + ', ' + p.velocity.y.toFixed(2) : '0,0'}`);
+    line(`Speed: ${p?.velocity ? Math.sqrt(p.velocity.x**2 + p.velocity.y**2).toFixed(2) : '0'}`);
+    line(`Energy: ${Math.floor(p?.energy || 0)}/${p?.maxEnergy || 0}`);
+    line(`Asteroids: ${gs.asteroids?.filter(a => a.active).length || 0}/${gs.asteroids?.length || 0}`);
+    line(`Enemies: ${gs.enemies?.filter(e => e.active).length || 0}/${gs.enemies?.length || 0}`);
+    line(`Projectiles: ${gs.projectiles?.filter(pr => pr.active).length || 0}`);
+    line(`Resources: ${gs.resources?.filter(r => r.active).length || 0}`);
+    line(`Power: ${p?.powerSystem?.powerState || '?'} | O2: ${Math.round(p?.powerSystem?.oxygenLevel || 0)}%`);
+
+    ctx.fillStyle = '#888';
+    ctx.font = '9px monospace';
+    ctx.fillText('Press D to close', 20, height - 15);
+  }
+
   _closeTrade() {
     const player = this.gameState.player;
     const station = this.gameState.currentStation;

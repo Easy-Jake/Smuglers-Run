@@ -80,25 +80,36 @@ export class Resource extends Entity {
       alpha = 1 - (lifePercent - 0.7) / 0.3;
     }
 
-    // Pulse effect
-    const pulseFreq = 2 + this.value / 5;
-    const pulse = 0.8 + Math.sin(Date.now() / 200 * pulseFreq) * 0.2;
+    // Pulse effect — higher value = faster pulse
+    const pulseFreq = 1.5 + this.value / 3;
+    const pulseTime = Date.now() / 200 + this.pulsePhase;
+    const pulse = 0.7 + Math.sin(pulseTime * pulseFreq) * 0.3;
 
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    // Glow
+    // Outer glow (larger, more transparent)
     ctx.fillStyle = this.glowColor;
+    ctx.globalAlpha = alpha * 0.15 * pulse;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 18 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inner glow
+    ctx.globalAlpha = alpha * 0.4;
     ctx.beginPath();
     ctx.arc(this.x, this.y, 10 * pulse, 0, Math.PI * 2);
     ctx.fill();
+    ctx.globalAlpha = alpha;
 
     // Diamond shape
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rotation);
 
-    const h = 8 * pulse;
-    const w = 8 * pulse;
+    // Scale diamond with value tier
+    const sizeBonus = Math.min(1.5, 1 + this.value / 30);
+    const h = 8 * pulse * sizeBonus;
+    const w = 6 * pulse * sizeBonus;
     ctx.fillStyle = this.color;
     ctx.beginPath();
     ctx.moveTo(0, -h);
