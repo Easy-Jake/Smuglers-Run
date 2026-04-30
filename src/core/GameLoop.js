@@ -38,6 +38,9 @@ export class GameLoop {
     // Collision handler
     this.collisionHandler = new CollisionHandler(services, gameState);
 
+    // Audio starts muted
+    this._isMuted = true;
+
     // Bind methods for callbacks
     this.update = this.update.bind(this);
   }

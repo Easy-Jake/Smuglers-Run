@@ -5,7 +5,7 @@
 
 let ctx = null;
 let musicElement = null;
-let muted = false;
+let muted = true; // default muted — press M to unmute
 let sfxVolume = 0.3;
 
 function getCtx() {
@@ -188,6 +188,8 @@ export function startMusic(src = 'sounds/background.mp3') {
   musicElement = new Audio(src);
   musicElement.loop = true;
   musicElement.volume = 0.15;
+  musicElement.muted = muted;
+  if (muted) return; // don't autoplay when muted
   musicElement.play().catch(() => {
     // Autoplay blocked — will start on first user interaction
     const resume = () => {
@@ -202,7 +204,12 @@ export function startMusic(src = 'sounds/background.mp3') {
 
 export function toggleMute() {
   muted = !muted;
-  if (musicElement) musicElement.muted = muted;
+  if (musicElement) {
+    musicElement.muted = muted;
+    if (!muted && musicElement.paused) {
+      musicElement.play().catch(() => {});
+    }
+  }
   return muted;
 }
 
