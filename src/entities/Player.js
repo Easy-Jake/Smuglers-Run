@@ -5,6 +5,7 @@ import { Entity } from './Entity.js';
 import { Vector2D } from '../utils/Vector2D.js';
 import { PlayerInputHandler } from './components/PlayerInputHandler.js';
 import { PowerSystem } from './components/PowerSystem.js';
+import { playSFX } from '../audio/SoundEngine.js';
 
 const PC = GAME_CONFIG.PLAYER;
 
@@ -166,6 +167,7 @@ export class Player extends Entity {
     if (this.energy < actualCost) return;
 
     this.energy -= actualCost;
+    playSFX('shoot');
 
     const projectile = new Projectile(
       this.x + Math.cos(this.angle) * this.radius,
@@ -218,7 +220,10 @@ export class Player extends Entity {
 
   // Power / Kill Switch — delegates to PowerSystem
   togglePower() {
-    return this.powerSystem.togglePower();
+    const wasPowered = this.isPowered();
+    const result = this.powerSystem.togglePower();
+    playSFX(this.isPowered() ? 'powerUp' : 'powerDown');
+    return result;
   }
 
   isPowered() {

@@ -1,5 +1,6 @@
 import { EventTypes } from '../ecs/events/EventTypes.js';
 import { Vector2D } from '../utils/Vector2D.js';
+import { playSFX } from '../audio/SoundEngine.js';
 
 /**
  * Handles collision detection and response between game entities
@@ -312,6 +313,7 @@ export class CollisionHandler {
     const damage = Math.max(1, Math.floor(impact * 3));
 
     player.takeDamage(damage, this.gameState);
+    playSFX('hit');
 
     // Bounce player away from asteroid
     const dx = player.x - asteroid.x;
@@ -365,6 +367,7 @@ export class CollisionHandler {
     const destroyed = asteroid.takeDamage(projectile.damage);
 
     if (destroyed) {
+      playSFX('explode');
       // Drop resources
       const drops = asteroid.dropResources();
       drops.forEach(resource => {

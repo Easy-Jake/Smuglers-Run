@@ -4,13 +4,17 @@ import { Resource } from './Resource.js';
 
 const SIZES = GAME_CONFIG.ASTEROIDS.SIZES;
 
-// Resource type color schemes
+// Resource type color schemes (periodic table progression)
 const RESOURCE_COLORS = {
-  carbon:   { body: '#706860', stroke: '#908070', crater: '#00000033' },
-  scrap:    { body: '#b87333', stroke: '#da8a44', crater: '#00000044' },
-  crystal:  { body: '#3388aa', stroke: '#44aacc', crater: '#ffffff22' },
-  rare_gas: { body: '#7744aa', stroke: '#9966cc', crater: '#ffffff22' },
-  plasma:   { body: '#aa8800', stroke: '#ccaa22', crater: '#ffff0033' },
+  hydro:       { body: '#556675', stroke: '#7788aa', crater: '#00000033' },
+  carbon:      { body: '#706860', stroke: '#908070', crater: '#00000033' },
+  ferro:       { body: '#8b5a2b', stroke: '#b87333', crater: '#00000044' },
+  silicrystal: { body: '#3388aa', stroke: '#44aacc', crater: '#ffffff22' },
+  titan:       { body: '#665588', stroke: '#8877aa', crater: '#ffffff22' },
+  nebula:      { body: '#7744aa', stroke: '#9966cc', crater: '#cc44ff22' },
+  aurum:       { body: '#aa8800', stroke: '#ccaa22', crater: '#ffff0033' },
+  thorium:     { body: '#338833', stroke: '#44aa44', crater: '#44ff4433' },
+  darkmatter:  { body: '#1a1a2e', stroke: '#333355', crater: '#ffffff11' },
 };
 
 export class Asteroid extends Entity {
@@ -27,11 +31,11 @@ export class Asteroid extends Entity {
     this.height = cfg.RADIUS * 2;
 
     // Scale health by resource tier (harder asteroids in harder zones)
-    const tierMult = resourceType === 'carbon' ? 1.0
-      : resourceType === 'scrap' ? 1.3
-      : resourceType === 'crystal' ? 2.0
-      : resourceType === 'rare_gas' ? 3.0
-      : resourceType === 'plasma' ? 5.0 : 1.0;
+    const TIER_MULT = {
+      hydro: 0.8, carbon: 1.0, ferro: 1.5, silicrystal: 2.5,
+      titan: 4.0, nebula: 3.5, aurum: 6.0, thorium: 8.0, darkmatter: 15.0,
+    };
+    const tierMult = TIER_MULT[resourceType] || 1.0;
     this.health = Math.round(cfg.HEALTH * tierMult);
     this.maxHealth = this.health;
 

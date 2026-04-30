@@ -3,6 +3,8 @@ import { PerformanceMonitor } from '../utils/PerformanceMonitor.js';
 import { PerformanceOptimizer } from '../utils/PerformanceOptimizer.js';
 import { EventTypes } from '../ecs/events/EventTypes.js';
 import { CollisionHandler } from './CollisionHandler.js';
+import { ZONES } from '../config/mapLayout.js';
+import { startMusic } from '../audio/SoundEngine.js';
 
 /**
  * Manages the main game loop with fixed timestep
@@ -77,10 +79,13 @@ export class GameLoop {
    */
   async start() {
     if (this.isRunning) return;
-    
+
     if (!this.isInitialized) {
       await this.initialize();
     }
+
+    // Start background music
+    startMusic();
     
     this.isRunning = true;
     this.lastTime = performance.now();
@@ -214,6 +219,7 @@ export class GameLoop {
           if (added > 0) {
             this.gameState.score += resource.value;
             resource.active = false;
+            import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
           }
         }
       }
@@ -542,6 +548,27 @@ export class GameLoop {
       const gy = my + g * scaleY;
       ctx.beginPath(); ctx.moveTo(gx, my); ctx.lineTo(gx, my + mapSize); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(mx, gy); ctx.lineTo(mx + mapSize, gy); ctx.stroke();
+    }
+
+    // Zone boundaries
+    const zoneColors = {
+      0: 'rgba(0, 255, 0, 0.2)',    // free — green
+      1: 'rgba(255, 255, 0, 0.15)', // low — yellow
+      2: 'rgba(255, 165, 0, 0.15)', // medium — orange
+      3: 'rgba(255, 0, 0, 0.15)',   // hard — red
+      4: 'rgba(128, 0, 255, 0.2)',  // boss — purple
+    };
+    for (const [, zone] of Object.entries(ZONES)) {
+      const zx = mx + zone.center.x * scaleX;
+      const zy = my + zone.center.y * scaleY;
+      const zr = zone.radius * scaleX;
+      ctx.strokeStyle = zoneColors[zone.tier] || 'rgba(255,255,255,0.1)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.arc(zx, zy, zr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
     // Asteroids (tiny gray dots)

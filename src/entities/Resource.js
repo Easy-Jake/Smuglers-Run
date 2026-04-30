@@ -3,13 +3,17 @@ import { Entity } from './Entity.js';
 
 const RC = GAME_CONFIG.RESOURCE;
 
-// Resource colors by type
+// Resource colors by type (periodic table progression)
 const TYPE_COLORS = {
-  carbon:   { color: '#888', glow: '#aaa' },
-  scrap:    { color: '#b87333', glow: '#da8a44' },
-  crystal:  { color: '#4af', glow: '#8cf' },
-  rare_gas: { color: '#a4f', glow: '#c8f' },
-  plasma:   { color: '#ff4', glow: '#ff8' },
+  hydro:       { color: '#aaddff', glow: '#cceeff' },
+  carbon:      { color: '#888', glow: '#aaa' },
+  ferro:       { color: '#b87333', glow: '#da8a44' },
+  silicrystal: { color: '#4af', glow: '#8cf' },
+  titan:       { color: '#9988cc', glow: '#bbaaee' },
+  nebula:      { color: '#a4f', glow: '#c8f' },
+  aurum:       { color: '#ffd700', glow: '#ffe44d' },
+  thorium:     { color: '#44ff44', glow: '#88ff88' },
+  darkmatter:  { color: '#222233', glow: '#ffffff' },
 };
 
 export class Resource extends Entity {
