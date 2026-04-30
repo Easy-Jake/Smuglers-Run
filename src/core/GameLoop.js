@@ -4,7 +4,7 @@ import { PerformanceOptimizer } from '../utils/PerformanceOptimizer.js';
 import { EventTypes } from '../ecs/events/EventTypes.js';
 import { CollisionHandler } from './CollisionHandler.js';
 import { ZONES } from '../config/mapLayout.js';
-import { startMusic } from '../audio/SoundEngine.js';
+import { startMusic, toggleMute } from '../audio/SoundEngine.js';
 
 /**
  * Manages the main game loop with fixed timestep
@@ -295,6 +295,15 @@ export class GameLoop {
     }
 
     // Rotation + Thrust controls (Asteroids-style)
+    // M key — mute toggle
+    const mPressed = im.isKeyPressed('m') || im.isKeyPressed('M');
+    if (mPressed && !this._mHeld) {
+      this._mHeld = true;
+      this._isMuted = toggleMute();
+    }
+    if (!im.isKeyPressed('m') && !im.isKeyPressed('M')) this._mHeld = false;
+
+    // Movement
     const rotateLeft  = im.isKeyPressed('ArrowLeft')  || im.isKeyPressed('a');
     const rotateRight = im.isKeyPressed('ArrowRight') || im.isKeyPressed('d');
     const thrust      = im.isKeyPressed('ArrowUp')    || im.isKeyPressed('w');
@@ -447,6 +456,15 @@ export class GameLoop {
     setEl('fuel', `Energy: ${Math.floor(gs.player?.energy || gs.fuel)}`);
     setEl('cargo', `Cargo: ${gs.player?.resources || 0}/${gs.player?.cargoCapacity || 50}`);
     setEl('credits', `Credits: ${gs.credits}`);
+
+    // Mute indicator (top center)
+    if (this._isMuted) {
+      ctx.fillStyle = 'rgba(255, 100, 100, 0.7)';
+      ctx.font = "10px 'Press Start 2P', monospace";
+      ctx.textAlign = 'center';
+      ctx.fillText('MUTED [M]', width / 2, 20);
+      ctx.textAlign = 'left';
+    }
   }
 
   /**
