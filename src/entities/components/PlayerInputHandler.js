@@ -21,9 +21,12 @@ export class PlayerInputHandler {
     this.player.x += this.player.velocity.x * dt;
     this.player.y += this.player.velocity.y * dt;
 
-    // Very low friction — space feel. Ship drifts a long time.
-    // 0.998 per frame ≈ loses ~12% speed per second at 60fps
-    this.player.velocity.multiplyMut(Math.pow(0.998, dt));
+    // Friction depends on inertial mode
+    // Normal: 0.998/frame (~12% loss/sec) — space feel
+    // Inertial: 0.9995/frame (~3% loss/sec) — extreme drift, almost no friction
+    const inertial = this.player.powerSystem?.inertialMode;
+    const friction = inertial ? 0.9995 : 0.998;
+    this.player.velocity.multiplyMut(Math.pow(friction, dt));
 
     // Handle jump cooldown (shoot cooldown handled in Player.update)
     if (this.player.jumpCooldown > 0) {
@@ -49,7 +52,9 @@ export class PlayerInputHandler {
     this.player.angle = this.player.rotation;
 
     // --- Thrust ---
-    const basePower = this.player.thrustPower * this.player.thrustMultiplier;
+    // Engine power allocation affects thrust strength
+    const engineMult = this.player.powerSystem?.getEnginePowerMultiplier() || 1.0;
+    const basePower = this.player.thrustPower * this.player.thrustMultiplier * engineMult;
 
     if (thrust) {
       if (boost && this.player.energy >= GAME_CONFIG.SHIP.BOOST.FUEL_COST) {

@@ -2,7 +2,8 @@ import { GAME_CONFIG } from '../config/gameConfig.js';
 import { Player } from '../entities/Player.js';
 import { Asteroid } from '../entities/Asteroid.js';
 import { Station } from '../entities/Station.js';
-import { ASTEROID_FIELDS, FIXED_STATIONS, MAP_WIDTH, MAP_HEIGHT } from '../config/mapLayout.js';
+import { Enemy } from '../entities/Enemy.js';
+import { ASTEROID_FIELDS, FIXED_STATIONS, MAP_WIDTH, MAP_HEIGHT, ZONES, ENEMY_TIERS, RESOURCE_TYPES } from '../config/mapLayout.js';
 
 export class GameState {
   constructor() {
@@ -137,8 +138,62 @@ export class GameState {
           size = field.size;
         }
 
-        const asteroid = new Asteroid(ax, ay, size);
+        const asteroid = new Asteroid(ax, ay, size, field.resourceType);
         this.asteroids.push(asteroid);
+      }
+    }
+
+    // Spawn enemies from zone definitions
+    this._spawnEnemies();
+  }
+
+  _spawnEnemies() {
+    for (const [, zone] of Object.entries(ZONES)) {
+      if (!zone.enemyTypes || zone.enemyCount === 0) continue;
+
+      for (let i = 0; i < zone.enemyCount; i++) {
+        // Pick a random enemy type from the zone's allowed types
+        const typeKey = zone.enemyTypes[Math.floor(Math.random() * zone.enemyTypes.length)];
+        const tierConfig = ENEMY_TIERS[typeKey];
+        if (!tierConfig) continue;
+
+        // Spawn position within zone radius
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * zone.radius * 0.8;
+        const sx = zone.center.x + Math.cos(angle) * dist;
+        const sy = zone.center.y + Math.sin(angle) * dist;
+
+        // Generate patrol waypoints within zone
+        const waypoints = [];
+        const wpCount = 3 + Math.floor(Math.random() * 2);
+        for (let w = 0; w < wpCount; w++) {
+          const wa = Math.random() * Math.PI * 2;
+          const wd = Math.random() * zone.radius * 0.7;
+          waypoints.push({
+            x: zone.center.x + Math.cos(wa) * wd,
+            y: zone.center.y + Math.sin(wa) * wd,
+          });
+        }
+
+        const enemy = new Enemy(sx, sy, {
+          enemyType: tierConfig.health > 60 ? 'heavy' : 'scout',
+          waypoints,
+        });
+
+        // Override stats from tier config
+        enemy.health = tierConfig.health;
+        enemy.maxHealth = tierConfig.health;
+        enemy.speed = tierConfig.speed;
+        enemy.maxSpeed = tierConfig.speed;
+        enemy.damage = tierConfig.damage;
+        enemy.sensorRange = zone.enemyDetectionRange || tierConfig.sensorRange;
+        enemy.attackRange = tierConfig.attackRange;
+        enemy.shootRate = tierConfig.shootRate;
+        enemy.creditReward = tierConfig.creditReward;
+        enemy.projectileDamage = tierConfig.damage;
+        enemy.enemyTier = tierConfig.name;
+
+        this.enemies.push(enemy);
       }
     }
   }
@@ -199,7 +254,25 @@ export class GameState {
     if (elements.timeSurvived) elements.timeSurvived.textContent = timeSurvived;
     
     // Show game over screen
-    if (elements.gameOverScreen) elements.gameOverScreen.style.display = 'block';
+    if (elements.gameOverScreen) {
+      elements.gameOverScreen.classList.add('active');
+    }
+
+    // Wire restart button
+    const restartBtn = document.querySelector('.restart-button');
+    if (restartBtn) {
+      restartBtn.onclick = () => {
+        if (elements.gameOverScreen) elements.gameOverScreen.classList.remove('active');
+        this.reset();
+      };
+    }
+    const menuBtn = document.querySelector('.main-menu-button');
+    if (menuBtn) {
+      menuBtn.onclick = () => {
+        if (elements.gameOverScreen) elements.gameOverScreen.classList.remove('active');
+        window.location.reload();
+      };
+    }
   }
 
   updateScore(points) {

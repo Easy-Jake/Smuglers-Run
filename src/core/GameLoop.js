@@ -270,13 +270,23 @@ export class GameLoop {
     }
     if (!im.isKeyPressed('e') && !im.isKeyPressed('E')) this._eHeld = false;
 
-    // X key — Kill Switch (toggle all power)
-    const xPressed = im.isKeyPressed('x') || im.isKeyPressed('X');
+    // X key or Backspace — Kill Switch (toggle all power)
+    const xPressed = im.isKeyPressed('x') || im.isKeyPressed('X') || im.isKeyPressed('Backspace');
     if (xPressed && !this._xHeld) {
       this._xHeld = true;
       player.togglePower();
     }
-    if (!im.isKeyPressed('x') && !im.isKeyPressed('X')) this._xHeld = false;
+    if (!im.isKeyPressed('x') && !im.isKeyPressed('X') && !im.isKeyPressed('Backspace')) this._xHeld = false;
+
+    // Power allocation keys: T/F/G then 0-9
+    const powerKeys = ['t','T','f','F','g','G','0','1','2','3','4','5','6','7','8','9'];
+    for (const pk of powerKeys) {
+      if (im.isKeyPressed(pk) && !this['_powerKey_' + pk]) {
+        this['_powerKey_' + pk] = true;
+        player.powerSystem?.processKey(pk);
+      }
+      if (!im.isKeyPressed(pk)) this['_powerKey_' + pk] = false;
+    }
 
     // Rotation + Thrust controls (Asteroids-style)
     const rotateLeft  = im.isKeyPressed('ArrowLeft')  || im.isKeyPressed('a');
@@ -399,6 +409,14 @@ export class GameLoop {
       if (this.gameState.player?.isPowered && !this.gameState.player.isPowered()) {
         this._renderKillSwitchHUD(ctx, width, height);
       }
+
+      // Draw minimap (top-right area, below Map Exploration)
+      this._renderMinimap(ctx, width, height);
+
+      // Draw power system HUD (bottom-right)
+      if (this.gameState.player?.powerSystem) {
+        this._renderPowerHUD(ctx, width, height);
+      }
     } catch (error) {
       console.error('GameLoop: Error during rendering:', error);
     }
@@ -487,6 +505,196 @@ export class GameLoop {
     ctx.fillStyle = '#f88';
     ctx.fillText('RUNNING DARK — PRESS X TO RESTORE', width / 2, 105);
     ctx.restore();
+  }
+
+  /**
+   * Render power system HUD — shows allocation bars + heat for each subsystem
+   * @private
+   */
+  /**
+   * Render minimap showing player position, station, and asteroids on the world
+   * @private
+   */
+  _renderMinimap(ctx, width, height) {
+    const gs = this.gameState;
+    const p = gs.player;
+    if (!p) return;
+
+    const mapSize = 150;
+    const mx = width - mapSize - 10;
+    const my = 130; // below Map Exploration widget
+    const worldW = 8000;
+    const worldH = 8000;
+    const scaleX = mapSize / worldW;
+    const scaleY = mapSize / worldH;
+
+    // Background
+    ctx.fillStyle = 'rgba(0, 0, 20, 0.7)';
+    ctx.strokeStyle = 'rgba(100, 100, 255, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.fillRect(mx, my, mapSize, mapSize);
+    ctx.strokeRect(mx, my, mapSize, mapSize);
+
+    // Grid lines (every 2000 units)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    for (let g = 2000; g < worldW; g += 2000) {
+      const gx = mx + g * scaleX;
+      const gy = my + g * scaleY;
+      ctx.beginPath(); ctx.moveTo(gx, my); ctx.lineTo(gx, my + mapSize); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mx, gy); ctx.lineTo(mx + mapSize, gy); ctx.stroke();
+    }
+
+    // Asteroids (tiny gray dots)
+    ctx.fillStyle = 'rgba(150, 130, 100, 0.5)';
+    for (const a of gs.asteroids) {
+      if (!a.active) continue;
+      const ax = mx + a.x * scaleX;
+      const ay = my + a.y * scaleY;
+      const ar = Math.max(1, a.radius * scaleX);
+      ctx.fillRect(ax - ar/2, ay - ar/2, ar, ar);
+    }
+
+    // Resources (light blue dots)
+    if (gs.resources) {
+      ctx.fillStyle = '#4ff';
+      for (const r of gs.resources) {
+        if (!r.active) continue;
+        const rx = mx + r.x * scaleX;
+        const ry = my + r.y * scaleY;
+        ctx.fillRect(rx - 1, ry - 1, 2, 2);
+      }
+    }
+
+    // Station (cyan square)
+    for (const s of gs.stations) {
+      const sx = mx + s.x * scaleX;
+      const sy = my + s.y * scaleY;
+      ctx.fillStyle = '#0ff';
+      ctx.fillRect(sx - 3, sy - 3, 6, 6);
+    }
+
+    // Enemies (red dots)
+    if (gs.enemies) {
+      for (const e of gs.enemies) {
+        if (!e.active) continue;
+        const ex = mx + e.x * scaleX;
+        const ey = my + e.y * scaleY;
+        ctx.fillStyle = e.state === 'chase' || e.state === 'attack' ? '#f00' : '#a44';
+        ctx.beginPath();
+        ctx.arc(ex, ey, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Player (bright green dot)
+    const px = mx + p.x * scaleX;
+    const py = my + p.y * scaleY;
+    ctx.fillStyle = '#0f0';
+    ctx.beginPath();
+    ctx.arc(px, py, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Player direction indicator
+    const dirLen = 8;
+    ctx.strokeStyle = '#0f0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(px + Math.cos(p.rotation) * dirLen, py + Math.sin(p.rotation) * dirLen);
+    ctx.stroke();
+
+    // Label
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${Math.round(p.x)}, ${Math.round(p.y)}`, mx + mapSize - 2, my + mapSize - 3);
+    ctx.textAlign = 'left';
+  }
+
+  /**
+   * Render power system HUD — shows allocation bars + heat for each subsystem
+   * @private
+   */
+  _renderPowerHUD(ctx, width, height) {
+    const ps = this.gameState.player.powerSystem;
+    const systems = [
+      { key: 'engines',    label: 'ENG', color: '#4af' },
+      { key: 'weapons',    label: 'WPN', color: '#fa4' },
+      { key: 'stabilizer', label: 'STB', color: '#4f4' },
+    ];
+
+    const panelW = 160;
+    const panelH = 80;
+    const px = width - panelW - 10;
+    const py = height - panelH - 10;
+
+    // Panel background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1;
+    ctx.fillRect(px, py, panelW, panelH);
+    ctx.strokeRect(px, py, panelW, panelH);
+
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+
+    systems.forEach((sys, i) => {
+      const y = py + 10 + i * 22;
+      const alloc = ps.allocation[sys.key];
+      const heat = ps.heat[sys.key];
+      const status = ps.status[sys.key];
+
+      // Label
+      ctx.fillStyle = status === 'nominal' ? sys.color : '#f44';
+      ctx.fillText(sys.label, px + 5, y + 9);
+
+      // Power bar (allocation 0-9)
+      const barX = px + 35;
+      const barW = 80;
+      const barH = 10;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(barX, y, barW, barH);
+      ctx.fillStyle = sys.color;
+      ctx.fillRect(barX, y, barW * (alloc / 9), barH);
+
+      // Allocation text
+      ctx.fillStyle = '#fff';
+      ctx.fillText(`${alloc * 10}%`, barX + barW + 4, y + 9);
+
+      // Heat indicator (small bar under power bar)
+      const heatY = y + barH + 1;
+      const heatH = 3;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(barX, heatY, barW, heatH);
+      // Heat color
+      let heatColor = '#4CAF50'; // green
+      if (heat > 50) heatColor = '#FFEB3B'; // yellow
+      if (heat > 75) heatColor = '#FF9800'; // orange
+      if (heat > 85) heatColor = '#F44336'; // red (redline)
+      if (heat > 95) heatColor = '#9C27B0'; // purple (critical)
+      ctx.fillStyle = heatColor;
+      ctx.fillRect(barX, heatY, barW * Math.min(1, heat / 100), heatH);
+    });
+
+    // Oxygen indicator (when in inertial mode)
+    if (ps.inertialMode) {
+      const oxy = ps.oxygenLevel;
+      let oxyColor = '#4f4';
+      if (oxy < 70) oxyColor = '#ff0';
+      if (oxy < 30) oxyColor = '#f44';
+      ctx.fillStyle = oxyColor;
+      ctx.font = '10px monospace';
+      ctx.fillText(`O₂: ${Math.round(oxy)}%`, px + 5, py - 5);
+    }
+
+    // Power allocation hint
+    if (ps.selectedSystem) {
+      ctx.fillStyle = '#ff0';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${ps.selectedSystem.toUpperCase()}: press 0-9`, width / 2, height - 30);
+      ctx.textAlign = 'left';
+    }
   }
 
   /**

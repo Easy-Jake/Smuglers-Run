@@ -24,9 +24,12 @@ export class CollisionHandler {
     // Skip collision detection if game is paused or over
     if (this.gameState.isPaused || this.gameState.isGameOver) return;
 
-    // Direct collision checks (bypassing broken QuadTree)
+    // Direct collision checks
     this._checkPlayerVsAsteroids();
     this._checkProjectilesVsAsteroids();
+    this._checkPlayerVsEnemies();
+    this._checkProjectilesVsEnemies();
+    this._checkEnemyProjectilesVsPlayer();
   }
 
   /**
@@ -67,6 +70,68 @@ export class CollisionHandler {
           projectile.active = false;
           break;
         }
+      }
+    }
+  }
+
+  /**
+   * Player vs enemy ships (ram damage)
+   */
+  _checkPlayerVsEnemies() {
+    const player = this.gameState.player;
+    if (!player || !player.active) return;
+    const enemies = this.gameState.enemies || [];
+
+    for (const enemy of enemies) {
+      if (!enemy.active) continue;
+      const dx = player.x - enemy.x;
+      const dy = player.y - enemy.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < player.radius + enemy.radius) {
+        this.handlePlayerEnemyCollision(player, enemy);
+      }
+    }
+  }
+
+  /**
+   * Player projectiles vs enemy ships
+   */
+  _checkProjectilesVsEnemies() {
+    const projectiles = this.gameState.projectiles || [];
+    const enemies = this.gameState.enemies || [];
+
+    for (const proj of projectiles) {
+      if (!proj.active || proj.owner !== 'player') continue;
+      for (const enemy of enemies) {
+        if (!enemy.active) continue;
+        const dx = proj.x - enemy.x;
+        const dy = proj.y - enemy.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < proj.radius + enemy.radius) {
+          this.handleProjectileEnemyCollision(proj, enemy);
+          proj.active = false;
+          break;
+        }
+      }
+    }
+  }
+
+  /**
+   * Enemy projectiles vs player
+   */
+  _checkEnemyProjectilesVsPlayer() {
+    const player = this.gameState.player;
+    if (!player || !player.active) return;
+    const projectiles = this.gameState.projectiles || [];
+
+    for (const proj of projectiles) {
+      if (!proj.active || proj.owner === 'player') continue;
+      const dx = proj.x - player.x;
+      const dy = proj.y - player.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < proj.radius + player.radius) {
+        this.handleEnemyProjectilePlayerCollision(proj, player);
+        proj.active = false;
       }
     }
   }
@@ -276,11 +341,14 @@ export class CollisionHandler {
    * Handle player projectile hitting an enemy
    */
   handleProjectileEnemyCollision(projectile, enemy) {
-    enemy.takeDamage(projectile.damage);
+    const destroyed = enemy.takeDamage(projectile.damage);
 
-    if (!enemy.active || enemy.health <= 0) {
-      enemy.active = false;
-      this.gameState.updateScore(50);
+    if (destroyed) {
+      this.gameState.updateScore(enemy.creditReward || 25);
+      // Award credits for kill
+      if (this.gameState.player) {
+        this.gameState.player.credits += enemy.creditReward || 25;
+      }
     }
 
     this.eventSystem.emit(EventTypes.COLLISION, {

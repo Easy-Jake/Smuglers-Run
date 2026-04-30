@@ -4,6 +4,7 @@ import { Particle } from './Particle.js';
 import { Entity } from './Entity.js';
 import { Vector2D } from '../utils/Vector2D.js';
 import { PlayerInputHandler } from './components/PlayerInputHandler.js';
+import { PowerSystem } from './components/PowerSystem.js';
 
 const PC = GAME_CONFIG.PLAYER;
 
@@ -60,10 +61,9 @@ export class Player extends Entity {
     this.undockCooldown = 0;
     this.isDockingRequested = false;
 
-    // Power / Kill Switch System
-    // When OFF: no thrust, no weapons, no energy signature — drift stealth
-    this.powerState = 'on'; // 'on' | 'off'
-    this.powerDownTime = 0;
+    // Power Management System (3 subsystems: engines, weapons, stabilizer)
+    this.powerSystem = new PowerSystem(this);
+    this.baseThrustPower = PC.THRUST_POWER; // store base for restoration after failures
 
     // Upgrade levels (all start at 1)
     this.cargoCapacityLevel = 1;
@@ -72,11 +72,17 @@ export class Player extends Entity {
     this.speedLevel = 1;
     this.resourceRangeLevel = 1;
     this.blasterDamageLevel = 1;
+    this.energyCapacityLevel = 1;
 
     // Derived combat values
     this.projectileDamage = GAME_CONFIG.PROJECTILES.DAMAGE;
     this.thrustCost = PC.ENERGY_COST.THRUST;
     this.shotCost = PC.ENERGY_COST.SHOT;
+
+    // Ship sprite — remove black background via canvas processing
+    this.sprite = null;
+    this.spriteLoaded = false;
+    this._loadSprite('assets/player-ship.png');
 
     // Initialize components
     this.inputHandler = new PlayerInputHandler(this);
@@ -92,6 +98,9 @@ export class Player extends Entity {
         this.isUndocking = false;
       }
     }
+
+    // Update power system (heat, failures, oxygen, inertial mode)
+    this.powerSystem.update(deltaTime);
 
     // Update input handler (applies velocity & friction)
     this.inputHandler.update(deltaTime);
@@ -150,9 +159,13 @@ export class Player extends Entity {
   shoot(gameState) {
     if (!this.isPowered()) return; // Can't shoot when dark
     if (this.shootCooldown > 0 || this.isDocked) return;
-    if (this.energy < this.shotCost) return;
 
-    this.energy -= this.shotCost;
+    // Weapon failure doubles shot cost
+    const costMult = this.powerSystem?.getWeaponCostMultiplier() || 1.0;
+    const actualCost = this.shotCost * costMult;
+    if (this.energy < actualCost) return;
+
+    this.energy -= actualCost;
 
     const projectile = new Projectile(
       this.x + Math.cos(this.angle) * this.radius,
@@ -203,19 +216,13 @@ export class Player extends Entity {
     );
   }
 
-  // Power / Kill Switch
+  // Power / Kill Switch — delegates to PowerSystem
   togglePower() {
-    if (this.powerState === 'on') {
-      this.powerState = 'off';
-      this.powerDownTime = Date.now();
-    } else {
-      this.powerState = 'on';
-      this.powerDownTime = 0;
-    }
+    return this.powerSystem.togglePower();
   }
 
   isPowered() {
-    return this.powerState === 'on';
+    return this.powerSystem.isPowered();
   }
 
   // Upgrade methods
@@ -234,46 +241,90 @@ export class Player extends Entity {
   upgradeSpeed() { this.speedLevel++; this.maxSpeed += 1; this.recalculateCosts(); }
   upgradeResourceRange() { this.resourceRangeLevel++; this.recalculateCosts(); }
   upgradeBlasterDamage() { this.blasterDamageLevel++; this.recalculateCosts(); }
+  upgradeEnergyCapacity() { this.energyCapacityLevel++; this.maxEnergy += 25; this.energy = Math.min(this.energy + 25, this.maxEnergy); }
+
+  /**
+   * Load sprite and strip black/dark background to transparent
+   */
+  _loadSprite(src) {
+    const img = new Image();
+    img.onload = () => {
+      // Draw to offscreen canvas to access pixel data
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      const cx = c.getContext('2d');
+      cx.drawImage(img, 0, 0);
+
+      const imageData = cx.getImageData(0, 0, c.width, c.height);
+      const data = imageData.data;
+
+      // Make dark pixels transparent (threshold-based)
+      const threshold = 35; // pixels darker than this become transparent
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        const brightness = (r + g + b) / 3;
+        if (brightness < threshold) {
+          data[i + 3] = 0; // fully transparent
+        } else if (brightness < threshold + 20) {
+          // Feather edge — partial transparency for smooth blending
+          data[i + 3] = Math.round(((brightness - threshold) / 20) * 255);
+        }
+      }
+
+      cx.putImageData(imageData, 0, 0);
+      this.sprite = c; // use the canvas as the sprite (works with drawImage)
+      this.spriteLoaded = true;
+    };
+    img.src = src;
+  }
 
   render(ctx) {
     if (!this.active) return;
 
     ctx.save();
     ctx.translate(this.x, this.y);
-    ctx.rotate(this.rotation);
+    // Sprite points DOWN by default, so subtract PI/2 to align with rotation (0 = right)
+    ctx.rotate(this.rotation - Math.PI / 2);
 
-    // Ship body — AD-style triangle
-    const r = this.radius;
     if (!this.isPowered()) {
       ctx.globalAlpha = 0.3;
-      ctx.strokeStyle = '#555';
-      ctx.fillStyle = '#333';
-    } else {
-      ctx.strokeStyle = '#fff';
-      ctx.fillStyle = '#0af';
     }
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(r, 0);                        // nose
-    ctx.lineTo(-r / 1.5, -r / 1.5);         // top wing
-    ctx.lineTo(-r / 2, 0);                   // back center
-    ctx.lineTo(-r / 1.5, r / 1.5);          // bottom wing
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
 
-    // Thruster flame
-    if (this.thrusting) {
+    const r = this.radius;
+    const spriteSize = r * 3; // scale sprite to roughly match collision radius
+
+    if (this.spriteLoaded) {
+      // Draw ship sprite centered
+      ctx.drawImage(this.sprite, -spriteSize / 2, -spriteSize / 2, spriteSize, spriteSize);
+    } else {
+      // Fallback triangle
+      ctx.strokeStyle = this.isPowered() ? '#fff' : '#555';
+      ctx.fillStyle = this.isPowered() ? '#0af' : '#333';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, -r);                      // nose (up)
+      ctx.lineTo(-r / 1.5, r / 1.5);         // left wing
+      ctx.lineTo(0, r / 2);                   // back center
+      ctx.lineTo(r / 1.5, r / 1.5);          // right wing
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Thruster flame (behind ship)
+    if (this.thrusting && this.isPowered()) {
       ctx.fillStyle = '#f70';
       const flicker = Math.random() * 10;
       ctx.beginPath();
-      ctx.moveTo(-r / 1.5, -r / 4);
-      ctx.lineTo(-r - flicker, 0);
-      ctx.lineTo(-r / 1.5, r / 4);
+      ctx.moveTo(-r / 4, r / 1.5);
+      ctx.lineTo(0, r + flicker);
+      ctx.lineTo(r / 4, r / 1.5);
       ctx.closePath();
       ctx.fill();
     }
 
+    ctx.globalAlpha = 1;
     ctx.restore();
 
     // Health bar

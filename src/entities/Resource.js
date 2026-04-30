@@ -3,13 +3,23 @@ import { Entity } from './Entity.js';
 
 const RC = GAME_CONFIG.RESOURCE;
 
+// Resource colors by type
+const TYPE_COLORS = {
+  carbon:   { color: '#888', glow: '#aaa' },
+  scrap:    { color: '#b87333', glow: '#da8a44' },
+  crystal:  { color: '#4af', glow: '#8cf' },
+  rare_gas: { color: '#a4f', glow: '#c8f' },
+  plasma:   { color: '#ff4', glow: '#ff8' },
+};
+
 export class Resource extends Entity {
-  constructor(x, y, value = RC.BASE_VALUE) {
+  constructor(x, y, value = RC.BASE_VALUE, resourceType = 'carbon') {
     super(x, y);
     this.radius = RC.RADIUS;
     this.width = RC.RADIUS * 2;
     this.height = RC.RADIUS * 2;
     this.value = value;
+    this.resourceType = resourceType;
     this.active = true;
 
     // Rotation & animation
@@ -27,9 +37,10 @@ export class Resource extends Entity {
     this.vx = Math.cos(angle) * speed;
     this.vy = Math.sin(angle) * speed;
 
-    // Colors
-    this.color = RC.COLOR;
-    this.glowColor = RC.GLOW_COLOR;
+    // Colors based on resource type
+    const tc = TYPE_COLORS[resourceType] || TYPE_COLORS.carbon;
+    this.color = tc.color;
+    this.glowColor = tc.glow;
   }
 
   update(deltaTime) {

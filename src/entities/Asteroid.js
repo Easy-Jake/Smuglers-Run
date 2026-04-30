@@ -4,10 +4,20 @@ import { Resource } from './Resource.js';
 
 const SIZES = GAME_CONFIG.ASTEROIDS.SIZES;
 
+// Resource type color schemes
+const RESOURCE_COLORS = {
+  carbon:   { body: '#706860', stroke: '#908070', crater: '#00000033' },
+  scrap:    { body: '#b87333', stroke: '#da8a44', crater: '#00000044' },
+  crystal:  { body: '#3388aa', stroke: '#44aacc', crater: '#ffffff22' },
+  rare_gas: { body: '#7744aa', stroke: '#9966cc', crater: '#ffffff22' },
+  plasma:   { body: '#aa8800', stroke: '#ccaa22', crater: '#ffff0033' },
+};
+
 export class Asteroid extends Entity {
-  constructor(x, y, size = 'medium') {
+  constructor(x, y, size = 'medium', resourceType = 'carbon') {
     super(x, y);
     this.type = 'asteroid';
+    this.resourceType = resourceType;
 
     // Size tier
     const cfg = SIZES[size] || SIZES.medium;
@@ -15,8 +25,16 @@ export class Asteroid extends Entity {
     this.radius = cfg.RADIUS;
     this.width = cfg.RADIUS * 2;
     this.height = cfg.RADIUS * 2;
-    this.health = cfg.HEALTH;
-    this.maxHealth = cfg.HEALTH;
+
+    // Scale health by resource tier (harder asteroids in harder zones)
+    const tierMult = resourceType === 'carbon' ? 1.0
+      : resourceType === 'scrap' ? 1.3
+      : resourceType === 'crystal' ? 2.0
+      : resourceType === 'rare_gas' ? 3.0
+      : resourceType === 'plasma' ? 5.0 : 1.0;
+    this.health = Math.round(cfg.HEALTH * tierMult);
+    this.maxHealth = this.health;
+
     this.resourceValue = cfg.RESOURCE_VALUE;
     this.resourceCount = cfg.RESOURCE_COUNT;
     this.armor = Math.floor(this.radius / 15);
@@ -55,9 +73,11 @@ export class Asteroid extends Entity {
       });
     }
 
-    // Colors per size
-    this.color = size === 'small' ? '#A07060' : size === 'large' ? '#805840' : '#906850';
-    this.strokeColor = size === 'small' ? '#C08070' : size === 'large' ? '#A06050' : '#B07060';
+    // Colors based on resource type
+    const rc = RESOURCE_COLORS[resourceType] || RESOURCE_COLORS.carbon;
+    this.color = rc.body;
+    this.strokeColor = rc.stroke;
+    this.craterColor = rc.crater;
 
     // Collision cooldown
     this.lastCollisionTime = 0;
@@ -101,7 +121,8 @@ export class Asteroid extends Entity {
       const r = new Resource(
         this.x + (Math.random() - 0.5) * this.radius,
         this.y + (Math.random() - 0.5) * this.radius,
-        this.resourceValue
+        this.resourceValue,
+        this.resourceType
       );
       drops.push(r);
     }
@@ -129,7 +150,7 @@ export class Asteroid extends Entity {
     ctx.stroke();
 
     // Draw craters
-    ctx.fillStyle = '#00000033';
+    ctx.fillStyle = this.craterColor || '#00000033';
     for (const c of this.craters) {
       ctx.beginPath();
       ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
