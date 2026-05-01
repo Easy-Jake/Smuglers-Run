@@ -242,10 +242,14 @@ export class GameLoop {
     const im = this.services.inputManager;
     const player = this.gameState.player;
 
-    // Escape key — pause toggle
+    // Escape key — close overlays or pause
     if (im.isKeyPressed('Escape') && !this._escHeld) {
       this._escHeld = true;
-      if (this.gameState.tradingActive) {
+      if (this._showFullMap) {
+        this._showFullMap = false;
+      } else if (this._showDebug) {
+        this._showDebug = false;
+      } else if (this.gameState.tradingActive) {
         this._closeTrade();
       } else {
         this.gameState.pauseGame();
@@ -253,7 +257,7 @@ export class GameLoop {
     }
     if (!im.isKeyPressed('Escape')) this._escHeld = false;
 
-    // Tab key — full map toggle
+    // Tab key — full map toggle (prevent browser default)
     if (im.isKeyPressed('Tab') && !this._tabHeld) {
       this._tabHeld = true;
       this._showFullMap = !this._showFullMap;

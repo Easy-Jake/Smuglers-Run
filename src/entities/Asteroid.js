@@ -39,7 +39,14 @@ export class Asteroid extends Entity {
     this.health = Math.round(cfg.HEALTH * tierMult);
     this.maxHealth = this.health;
 
-    this.resourceValue = cfg.RESOURCE_VALUE;
+    // Resource value scales with BOTH size and resource type
+    // Resource type is the main driver — rarer resources = much more valuable
+    const RESOURCE_VALUE_MULT = {
+      hydro: 1, carbon: 2, ferro: 5, silicrystal: 12,
+      titan: 20, nebula: 35, aurum: 60, thorium: 100, darkmatter: 500,
+    };
+    const valueMult = RESOURCE_VALUE_MULT[resourceType] || 1;
+    this.resourceValue = cfg.RESOURCE_VALUE * valueMult;
     this.resourceCount = cfg.RESOURCE_COUNT;
     this.armor = Math.floor(this.radius / 15);
     this.active = true;

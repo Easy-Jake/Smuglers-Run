@@ -63,6 +63,11 @@ export class KeyboardInputHandler {
    * @param {KeyboardEvent} event - Keyboard event
    */
   #handleKeyDown(event) {
+    // Prevent browser defaults for game keys
+    if (event.key === 'Tab' || event.key === ' ') {
+      event.preventDefault();
+    }
+
     if (!event.repeat) {
       this.#keys.set(event.key, {
         pressed: true,
