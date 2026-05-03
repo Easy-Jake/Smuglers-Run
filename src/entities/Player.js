@@ -196,10 +196,38 @@ export class Player extends Entity {
     this.ammo = Math.min(this.maxAmmo, this.ammo + amount);
   }
 
-  addResources(amount) {
+  addResources(amount, resourceType = 'carbon') {
     const canAdd = Math.min(amount, this.cargoCapacity - this.resources);
+    if (canAdd <= 0) return 0;
     this.resources += canAdd;
+    // Track by type for proper sell prices
+    if (!this.cargoByType) this.cargoByType = {};
+    this.cargoByType[resourceType] = (this.cargoByType[resourceType] || 0) + canAdd;
     return canAdd;
+  }
+
+  // Calculate total sell value of cargo across all types
+  getCargoValue() {
+    if (!this.cargoByType) return 0;
+    // sellPrice values from RESOURCE_TYPES
+    const PRICES = {
+      hydro: 3, carbon: 8, ferro: 18, silicrystal: 45, titan: 85,
+      nebula: 150, aurum: 300, thorium: 500, darkmatter: 2000,
+    };
+    let total = 0;
+    for (const [type, count] of Object.entries(this.cargoByType)) {
+      total += (PRICES[type] || 5) * count;
+    }
+    return total;
+  }
+
+  // Sell all cargo, return total credits earned
+  sellAllCargo() {
+    const earned = this.getCargoValue();
+    this.credits += earned;
+    this.resources = 0;
+    this.cargoByType = {};
+    return earned;
   }
 
   refuelEnergy(amount) {

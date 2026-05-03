@@ -327,8 +327,21 @@ export class CollisionHandler {
     const impactSpeed = Math.abs(relSpeed);
 
     // Damage scales with impact speed (squared for realism — higher speed hurts MORE)
+    // Plus a density modifier per resource type — denser ores hurt more on impact
     // Threshold: under 0.5 speed = no damage (gentle bump)
-    const playerDamage = impactSpeed > 0.5 ? Math.max(1, Math.floor(impactSpeed * impactSpeed * 0.8)) : 0;
+    const DENSITY_MULT = {
+      hydro: 0.5,        // light gas — barely hurts
+      carbon: 0.8,
+      ferro: 1.2,        // metal — hurts more
+      silicrystal: 1.0,
+      titan: 1.5,        // dense titanium
+      nebula: 0.7,       // gas pocket
+      aurum: 1.8,        // dense metal
+      thorium: 2.0,      // heavy
+      darkmatter: 3.0,   // ouch
+    };
+    const density = DENSITY_MULT[asteroid.resourceType] || 1.0;
+    const playerDamage = impactSpeed > 0.5 ? Math.max(1, Math.floor(impactSpeed * impactSpeed * 0.8 * density)) : 0;
     const asteroidDamage = impactSpeed > 0.5 ? Math.max(1, Math.floor(impactSpeed * 1.2)) : 0;
 
     if (playerDamage > 0) {

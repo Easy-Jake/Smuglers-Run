@@ -220,7 +220,7 @@ export class GameLoop {
         const dy = player.y - resource.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist < player.resourcePickupRange) {
-          const added = player.addResources(1);
+          const added = player.addResources(1, resource.resourceType || 'carbon');
           if (added > 0) {
             this.gameState.score += resource.value;
             resource.active = false;
@@ -1130,31 +1130,51 @@ export class GameLoop {
 
     let y = py + 88;
 
-    // === SELL RESOURCES ===
+    // === SELL CARGO (typed manifest) ===
     ctx.fillStyle = '#4a4';
     ctx.font = 'bold 13px Arial';
     ctx.fillText('SELL CARGO', px + 15, y);
 
-    if (player.resources > 0) {
-      // Calculate sell value based on average resource value (simplified)
-      const sellPrice = TC.PRICES.RESOURCE_BUY; // station buys at this price
-      const totalValue = player.resources * sellPrice;
+    const cargo = player.cargoByType || {};
+    const cargoTypes = Object.keys(cargo).filter(t => cargo[t] > 0);
+    const PRICES = { hydro: 3, carbon: 8, ferro: 18, silicrystal: 45, titan: 85, nebula: 150, aurum: 300, thorium: 500, darkmatter: 2000 };
+    const NAMES = { hydro: 'Hydro', carbon: 'Carbon', ferro: 'Ferro', silicrystal: 'Sili-Cry', titan: 'Titan', nebula: 'Nebula', aurum: 'Aurum', thorium: 'Thorium', darkmatter: 'DarkMtr' };
+
+    if (cargoTypes.length > 0) {
+      const totalValue = player.getCargoValue();
       ctx.font = '11px Arial';
       ctx.fillStyle = '#aaa';
-      ctx.fillText(`${player.resources} units @ ${sellPrice}cr = ${totalValue}cr`, px + 130, y);
+      ctx.fillText(`${player.resources} units · ${totalValue}cr total`, px + 130, y);
 
       this._drawTradeButton(ctx, px + panelW - 135, y - 13, 120, 22, `SELL ALL (+${totalValue})`, '#3a3', () => {
-        player.credits += totalValue;
-        this.gameState.score += totalValue;
-        player.resources = 0;
+        const earned = player.sellAllCargo();
+        this.gameState.score += earned;
         import('../audio/SoundEngine.js').then(m => m.playSFX('dock'));
       });
+
+      // Manifest — what types and how much each
+      y += 18;
+      const typesPerRow = 3;
+      cargoTypes.forEach((type, i) => {
+        const col = i % typesPerRow;
+        const row = Math.floor(i / typesPerRow);
+        const mx = px + 25 + col * 175;
+        const my = y + row * 14;
+        const count = cargo[type];
+        const value = count * (PRICES[type] || 5);
+        ctx.font = '10px Arial';
+        ctx.fillStyle = '#bbf';
+        ctx.fillText(`${NAMES[type] || type} ×${count}`, mx, my);
+        ctx.fillStyle = '#888';
+        ctx.fillText(`${value}cr`, mx + 100, my);
+      });
+      y += Math.ceil(cargoTypes.length / typesPerRow) * 14 + 10;
     } else {
       ctx.font = '11px Arial';
       ctx.fillStyle = '#666';
       ctx.fillText('No cargo to sell', px + 130, y);
+      y += 30;
     }
-    y += 30;
 
     // === ENERGY REFUEL — pay per unit (gas pump style) ===
     ctx.fillStyle = '#4af';
@@ -1162,7 +1182,7 @@ export class GameLoop {
     ctx.fillText('REFUEL ENERGY', px + 15, y);
 
     const PRICE_PER_UNIT = 2; // 2 credits per energy unit
-    const energyNeeded = player.maxEnergy - player.energy;
+    const energyNeeded = Math.ceil(player.maxEnergy - player.energy);
     const fullCost = Math.ceil(energyNeeded * PRICE_PER_UNIT);
     const affordableUnits = Math.floor(player.credits / PRICE_PER_UNIT);
     const fillUpUnits = Math.min(energyNeeded, affordableUnits);
