@@ -94,7 +94,7 @@ export class Asteroid extends Entity {
     this.lastCollisionTime = 0;
   }
 
-  update(deltaTime) {
+  update(deltaTime, gameState) {
     if (!this.active) return;
 
     this.x += this.vx;
@@ -108,6 +108,29 @@ export class Asteroid extends Entity {
     if (this.y < 0 || this.y > h) this.vy *= -1;
     this.x = Math.max(0, Math.min(w, this.x));
     this.y = Math.max(0, Math.min(h, this.y));
+
+    // Push out of station safe zones — asteroids can't enter docking areas
+    if (gameState?.stations) {
+      for (const station of gameState.stations) {
+        const dx = this.x - station.x;
+        const dy = this.y - station.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const minDist = station.safeZoneRadius + this.radius;
+        if (dist < minDist) {
+          // Push asteroid back to safe zone edge + bounce
+          const nx = dx / (dist || 1);
+          const ny = dy / (dist || 1);
+          this.x = station.x + nx * minDist;
+          this.y = station.y + ny * minDist;
+          // Reflect velocity outward
+          const dot = this.vx * nx + this.vy * ny;
+          if (dot < 0) {
+            this.vx -= 2 * dot * nx;
+            this.vy -= 2 * dot * ny;
+          }
+        }
+      }
+    }
   }
 
   takeDamage(amount) {

@@ -75,7 +75,11 @@ const INERTIA = {
   GRACE_PERIOD_SECONDS: 7,
 };
 
-const IDLE_ENERGY_DRAIN = 0.02; // tiny drain per frame while powered on
+// Base idle drain is very small — scales up with active power allocation
+// Total drain = BASE + (sum of allocations × ALLOC_DRAIN_FACTOR)
+// At default allocations (5+3+1 = 9): 0.002 + 9 × 0.0008 = 0.0092/frame ≈ 0.55/sec
+const IDLE_BASE_DRAIN = 0.002;
+const ALLOC_DRAIN_FACTOR = 0.0008;
 
 const BASE_START_PROBABILITY = 0.3;
 const MAX_START_ATTEMPTS = 5;
@@ -182,8 +186,14 @@ export class PowerSystem {
       this.oxygenLevel = Math.min(100, this.oxygenLevel + 30 * dt); // recover at 30%/sec when powered
     }
 
-    // Idle energy drain — ship uses tiny amount just being on
-    this.player.energy = Math.max(0, this.player.energy - IDLE_ENERGY_DRAIN * dt * 60);
+    // Idle energy drain — scales with how much power is allocated to systems
+    // At default (5+3+1=9), drains ~0.55/sec. Cut all power to 0 and drain is just 0.12/sec.
+    const totalAlloc =
+      (this.allocation[SYSTEM_NAMES.ENGINES] || 0) +
+      (this.allocation[SYSTEM_NAMES.WEAPONS] || 0) +
+      (this.allocation[SYSTEM_NAMES.STABILIZER] || 0);
+    const drain = IDLE_BASE_DRAIN + totalAlloc * ALLOC_DRAIN_FACTOR;
+    this.player.energy = Math.max(0, this.player.energy - drain * dt * 60);
 
     // If energy hits 0 and we still have power, force shutdown
     if (this.player.energy <= 0 && this.powerState === POWER_STATE.ON) {

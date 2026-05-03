@@ -61,7 +61,7 @@ export class GameState {
 
     // Update all game objects
     this.player?.update(deltaTime);
-    this.asteroids.forEach(asteroid => asteroid.update(deltaTime));
+    this.asteroids.forEach(asteroid => asteroid.update(deltaTime, this));
     this.enemies.forEach(enemy => enemy.update(deltaTime, this));
     this.stations.forEach(station => station.update(deltaTime));
     this.projectiles.forEach(projectile => projectile.update(deltaTime));
