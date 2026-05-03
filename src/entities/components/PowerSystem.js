@@ -157,6 +157,19 @@ export class PowerSystem {
   update(deltaTime) {
     const dt = deltaTime; // already in seconds-ish from fixed timestep
 
+    // While docked at a station, ship is on station power/air — no drain at all
+    // Heat and damage also dissipate faster while docked (station maintenance)
+    if (this.player.isDocked) {
+      // Slow heat dissipation
+      for (const system of Object.values(SYSTEM_NAMES)) {
+        this.heat[system] = Math.max(0, this.heat[system] - HEAT_DISSIPATION * 2 * dt * 60);
+      }
+      // Reset oxygen and grace timer
+      this.oxygenLevel = 100;
+      this.graceTimer = 0;
+      return;
+    }
+
     // If power is off, deplete oxygen + grace period
     if (this.powerState !== POWER_STATE.ON) {
       if (this.inertialMode || this.oxygenLevel < 100) {
