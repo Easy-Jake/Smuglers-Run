@@ -1137,7 +1137,7 @@ export class GameLoop {
 
     const cargo = player.cargoByType || {};
     const cargoTypes = Object.keys(cargo).filter(t => cargo[t] > 0);
-    const PRICES = { hydro: 3, carbon: 8, ferro: 18, silicrystal: 45, titan: 85, nebula: 150, aurum: 300, thorium: 500, darkmatter: 2000 };
+    const PRICES = { hydro: 8, carbon: 15, ferro: 30, silicrystal: 45, titan: 85, nebula: 150, aurum: 300, thorium: 500, darkmatter: 2000 };
     const NAMES = { hydro: 'Hydro', carbon: 'Carbon', ferro: 'Ferro', silicrystal: 'Sili-Cry', titan: 'Titan', nebula: 'Nebula', aurum: 'Aurum', thorium: 'Thorium', darkmatter: 'DarkMtr' };
 
     if (cargoTypes.length > 0) {

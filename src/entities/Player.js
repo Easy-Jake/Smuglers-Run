@@ -211,7 +211,7 @@ export class Player extends Entity {
     if (!this.cargoByType) return 0;
     // sellPrice values from RESOURCE_TYPES
     const PRICES = {
-      hydro: 3, carbon: 8, ferro: 18, silicrystal: 45, titan: 85,
+      hydro: 8, carbon: 15, ferro: 30, silicrystal: 45, titan: 85,
       nebula: 150, aurum: 300, thorium: 500, darkmatter: 2000,
     };
     let total = 0;
