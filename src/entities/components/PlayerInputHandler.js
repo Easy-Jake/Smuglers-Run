@@ -21,11 +21,24 @@ export class PlayerInputHandler {
     this.player.x += this.player.velocity.x * dt;
     this.player.y += this.player.velocity.y * dt;
 
-    // Friction depends on inertial mode
-    // Normal: 0.998/frame (~12% loss/sec) — space feel
-    // Inertial: 0.9995/frame (~3% loss/sec) — extreme drift, almost no friction
-    const inertial = this.player.powerSystem?.inertialMode;
-    const friction = inertial ? 0.9995 : 0.998;
+    // Friction depends on inertial mode + stabilizer power
+    // Normal physics: 0.9995/frame baseline (very minimal drag — true space)
+    // Stabilizer adds artificial drag: more power = better stopping
+    //   Stab 0%: pure Newtonian (0.9995)
+    //   Stab 90%: heavy drag (0.96)
+    // Inertial mode (power off): always 0.9995 — stabilizer can't help
+    const ps = this.player.powerSystem;
+    const inertial = ps?.inertialMode;
+    let friction = 0.9995;
+    if (!inertial && ps) {
+      // Stabilizer adds friction proportional to allocation
+      // Heat damaged stab is less effective
+      const stabPower = ps.allocation?.stabilizer || 0;
+      const stabHealthMult = (ps.systemHealth?.stabilizer || 100) / 100;
+      const stabRatio = (stabPower / 9) * stabHealthMult;
+      // Lerp between minimal drag (0.9995) and strong drag (0.96)
+      friction = 0.9995 - stabRatio * 0.0395;
+    }
     this.player.velocity.multiplyMut(Math.pow(friction, dt));
 
     // Handle jump cooldown (shoot cooldown handled in Player.update)

@@ -68,8 +68,14 @@ const POWER_STATE = {
 
 const INERTIA = {
   DRIFT_MULTIPLIER: 0.995,
-  OXYGEN_DEPLETION_RATE: 0.1,
+  // Oxygen lasts 15 seconds at 60fps = 900 frames
+  // Depletion rate of 100/900 ≈ 0.111 per frame to last 15s
+  OXYGEN_DEPLETION_RATE: 100 / 900, // 15 seconds to deplete
+  // Grace period after oxygen runs out — 7 seconds before death
+  GRACE_PERIOD_SECONDS: 7,
 };
+
+const IDLE_ENERGY_DRAIN = 0.02; // tiny drain per frame while powered on
 
 const BASE_START_PROBABILITY = 0.3;
 const MAX_START_ATTEMPTS = 5;
@@ -105,6 +111,14 @@ export class PowerSystem {
       [SYSTEM_NAMES.STABILIZER]: 0,
     };
 
+    // System damage (separate from ship hull) — 100 = healthy, 0 = destroyed
+    this.systemHealth = {
+      [SYSTEM_NAMES.ENGINES]: 100,
+      [SYSTEM_NAMES.WEAPONS]: 100,
+      [SYSTEM_NAMES.STABILIZER]: 100,
+    };
+    this.systemMaxHealth = 100;
+
     // Stability upgrade levels (start at 1)
     this.stabilityUpgradeLevel = {
       [SYSTEM_NAMES.ENGINES]: 1,
@@ -127,6 +141,9 @@ export class PowerSystem {
     this.selectedSystem = null;
     this.keySelectionTime = 0;
 
+    // Oxygen grace period (after O2 hits zero, you have N seconds before dying)
+    this.graceTimer = 0;
+
     // Store original values for restoration
     this._originalFriction = player.friction || 0.998;
   }
@@ -136,11 +153,42 @@ export class PowerSystem {
   update(deltaTime) {
     const dt = deltaTime; // already in seconds-ish from fixed timestep
 
-    // If power is off, just deplete oxygen in inertial mode
+    // If power is off, deplete oxygen + grace period
     if (this.powerState !== POWER_STATE.ON) {
-      if (this.inertialMode) {
-        this.oxygenLevel = Math.max(0, this.oxygenLevel - INERTIA.OXYGEN_DEPLETION_RATE * dt * 60);
+      if (this.inertialMode || this.oxygenLevel < 100) {
+        if (this.oxygenLevel > 0) {
+          this.oxygenLevel = Math.max(0, this.oxygenLevel - INERTIA.OXYGEN_DEPLETION_RATE * dt * 60);
+        } else {
+          // Grace period — N seconds of suffocation before death
+          this.graceTimer += dt;
+          if (this.graceTimer >= INERTIA.GRACE_PERIOD_SECONDS) {
+            // Player dies from suffocation
+            if (this.player.takeDamage) {
+              this.player.takeDamage(999, this.player._gameState);
+            }
+          } else {
+            // Damage from suffocation as warning
+            const sufferRate = 5; // 5 hp/sec while suffocating
+            this.player.health = Math.max(0, this.player.health - sufferRate * dt);
+          }
+        }
       }
+      return;
+    }
+
+    // Reset grace timer when powered on (oxygen recovers)
+    this.graceTimer = 0;
+    if (this.oxygenLevel < 100) {
+      this.oxygenLevel = Math.min(100, this.oxygenLevel + 30 * dt); // recover at 30%/sec when powered
+    }
+
+    // Idle energy drain — ship uses tiny amount just being on
+    this.player.energy = Math.max(0, this.player.energy - IDLE_ENERGY_DRAIN * dt * 60);
+
+    // If energy hits 0 and we still have power, force shutdown
+    if (this.player.energy <= 0 && this.powerState === POWER_STATE.ON) {
+      this.powerState = POWER_STATE.OFF;
+      this._shutdown();
       return;
     }
 
@@ -176,8 +224,11 @@ export class PowerSystem {
       const coolingFactor = 1 + (1 - powerRatio) * 0.5;
       this.heat[system] = Math.max(0, this.heat[system] - HEAT_DISSIPATION * coolingFactor * dt * 60);
 
-      // Overheating check
+      // Overheating check + damage to system
       if (this.heat[system] > REDLINE_THRESHOLD) {
+        // Damage system from sustained heat
+        const damageRate = (this.heat[system] - REDLINE_THRESHOLD) / 10;
+        this.systemHealth[system] = Math.max(0, this.systemHealth[system] - damageRate * dt * 60);
         this._checkStability(system);
       }
     }
@@ -403,9 +454,20 @@ export class PowerSystem {
   }
 
   // --- Engine power modifier (affects thrust) ---
-
+  // Scales dramatically: 0% = ~0.2x (almost dead in water), 90% = 2.0x (fast)
+  // Damaged engines are less effective
   getEnginePowerMultiplier() {
-    return 0.5 + this.getPowerRatio(SYSTEM_NAMES.ENGINES); // 0.5 at 0%, 1.4 at 90%
+    const ratio = this.getPowerRatio(SYSTEM_NAMES.ENGINES);
+    const healthMult = (this.systemHealth[SYSTEM_NAMES.ENGINES] || 100) / 100;
+    return (0.2 + ratio * 2.0) * healthMult;
+  }
+
+  // Weapon damage/cooldown scaling — more power = more damage but more heat
+  getWeaponPowerMultiplier() {
+    const ratio = this.getPowerRatio(SYSTEM_NAMES.WEAPONS);
+    const healthMult = (this.systemHealth[SYSTEM_NAMES.WEAPONS] || 100) / 100;
+    // 0% = 0.5x damage (won't fire), 90% = 1.6x damage
+    return (0.5 + ratio * 1.2) * healthMult;
   }
 
   // --- Serialization ---

@@ -488,17 +488,28 @@ export class GameLoop {
    * @private
    */
   renderHUD(ctx, width, height) {
-    // Update HTML HUD elements
+    // Update HTML HUD elements with both text and progress bars
     const gs = this.gameState;
-    const setEl = (id, text) => {
+    const player = gs.player;
+
+    const setText = (id, text) => {
       const el = document.getElementById(id);
       if (el) el.textContent = text;
     };
-    setEl('score', `Score: ${gs.score}`);
-    setEl('health', `Health: ${Math.floor(gs.health)}`);
-    setEl('fuel', `Energy: ${Math.floor(gs.player?.energy || gs.fuel)}`);
-    setEl('cargo', `Cargo: ${gs.player?.resources || 0}/${gs.player?.cargoCapacity || 50}`);
-    setEl('credits', `Credits: ${gs.credits}`);
+
+    const setBar = (id, label, value, max) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const pct = Math.max(0, Math.min(100, (value / max) * 100));
+      el.style.setProperty('--value', `${pct}%`);
+      el.setAttribute('data-value', `${label} ${Math.floor(value)}/${max}`);
+    };
+
+    setText('score', `Score: ${gs.score}`);
+    setBar('health', 'HULL', player?.health || gs.health, player?.maxHealth || 100);
+    setBar('fuel', 'ENERGY', player?.energy || 0, player?.maxEnergy || 100);
+    setText('cargo', `Cargo: ${player?.resources || 0}/${player?.cargoCapacity || 20}`);
+    setText('credits', `Credits: ${gs.credits}`);
 
     // Mute indicator (top center)
     if (this._isMuted) {
@@ -724,81 +735,183 @@ export class GameLoop {
   _renderPowerHUD(ctx, width, height) {
     const ps = this.gameState.player.powerSystem;
     const systems = [
-      { key: 'engines',    label: 'ENG', color: '#4af' },
-      { key: 'weapons',    label: 'WPN', color: '#fa4' },
-      { key: 'stabilizer', label: 'STB', color: '#4f4' },
+      { key: 'engines',    label: 'ENG', color: '#4af', accent: '#7cf' },
+      { key: 'weapons',    label: 'WPN', color: '#fa4', accent: '#fc7' },
+      { key: 'stabilizer', label: 'STB', color: '#4f4', accent: '#7f7' },
     ];
 
-    const panelW = 160;
-    const panelH = 80;
-    const px = width - panelW - 10;
-    const py = height - panelH - 10;
-
-    // Panel background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.strokeStyle = '#555';
-    ctx.lineWidth = 1;
-    ctx.fillRect(px, py, panelW, panelH);
-    ctx.strokeRect(px, py, panelW, panelH);
-
-    ctx.font = '9px monospace';
-    ctx.textAlign = 'left';
+    // Vertical thermometers on left side
+    const thermW = 26;
+    const thermH = 200;
+    const startY = 280; // below top-left HUD
+    const startX = 12;
+    const gap = 4;
 
     systems.forEach((sys, i) => {
-      const y = py + 10 + i * 22;
+      const x = startX + i * (thermW + gap);
+      const y = startY;
       const alloc = ps.allocation[sys.key];
       const heat = ps.heat[sys.key];
       const status = ps.status[sys.key];
+      const sysHealth = ps.systemHealth[sys.key];
 
-      // Label
+      // Label at top
       ctx.fillStyle = status === 'nominal' ? sys.color : '#f44';
-      ctx.fillText(sys.label, px + 5, y + 9);
+      ctx.font = "bold 9px 'Press Start 2P', monospace";
+      ctx.textAlign = 'center';
+      ctx.fillText(sys.label, x + thermW / 2, y - 6);
 
-      // Power bar (allocation 0-9)
-      const barX = px + 35;
-      const barW = 80;
-      const barH = 10;
-      ctx.fillStyle = '#333';
-      ctx.fillRect(barX, y, barW, barH);
-      ctx.fillStyle = sys.color;
-      ctx.fillRect(barX, y, barW * (alloc / 9), barH);
+      // Allocation % below label
+      ctx.fillStyle = '#aaa';
+      ctx.font = '9px monospace';
+      ctx.fillText(`${alloc * 10}%`, x + thermW / 2, y + thermH + 14);
 
-      // Allocation text
-      ctx.fillStyle = '#fff';
-      ctx.fillText(`${alloc * 10}%`, barX + barW + 4, y + 9);
+      // Outer thermometer body (rounded rect look)
+      ctx.fillStyle = 'rgba(20, 20, 30, 0.8)';
+      ctx.fillRect(x, y, thermW, thermH);
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, thermW, thermH);
 
-      // Heat indicator (small bar under power bar)
-      const heatY = y + barH + 1;
-      const heatH = 3;
-      ctx.fillStyle = '#333';
-      ctx.fillRect(barX, heatY, barW, heatH);
-      // Heat color
-      let heatColor = '#4CAF50'; // green
-      if (heat > 50) heatColor = '#FFEB3B'; // yellow
-      if (heat > 75) heatColor = '#FF9800'; // orange
-      if (heat > 85) heatColor = '#F44336'; // red (redline)
-      if (heat > 95) heatColor = '#9C27B0'; // purple (critical)
+      // Heat fill (from bottom up)
+      const heatPct = Math.min(1, heat / 100);
+      const fillH = thermH * heatPct;
+      let heatColor = '#4CAF50';
+      if (heat > 50) heatColor = '#FFEB3B';
+      if (heat > 75) heatColor = '#FF9800';
+      if (heat > 85) heatColor = '#F44336';
+      if (heat > 95) heatColor = '#9C27B0';
       ctx.fillStyle = heatColor;
-      ctx.fillRect(barX, heatY, barW * Math.min(1, heat / 100), heatH);
+      ctx.fillRect(x + 2, y + thermH - fillH + 2, thermW - 4, fillH - 4);
+
+      // Redline marker at 85%
+      const redlineY = y + thermH - thermH * 0.85;
+      ctx.strokeStyle = '#f00';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.moveTo(x, redlineY);
+      ctx.lineTo(x + thermW, redlineY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Power allocation indicator on right edge of thermometer
+      const allocY = y + thermH - thermH * (alloc / 9);
+      ctx.fillStyle = sys.accent;
+      ctx.fillRect(x + thermW, allocY - 2, 4, 4);
+
+      // System damage bar at bottom
+      if (sysHealth < 100) {
+        const dmgY = y + thermH + 18;
+        ctx.fillStyle = '#400';
+        ctx.fillRect(x, dmgY, thermW, 3);
+        ctx.fillStyle = sysHealth < 30 ? '#f44' : sysHealth < 60 ? '#fa4' : '#ff4';
+        ctx.fillRect(x, dmgY, thermW * (sysHealth / 100), 3);
+      }
+
+      // Status indicator below
+      if (status !== 'nominal') {
+        ctx.fillStyle = '#f44';
+        ctx.font = '8px monospace';
+        const statusShort = status === 'minor_failure' ? 'MIN'
+          : status === 'major_failure' ? 'MAJ'
+          : status === 'critical_failure' ? 'CRIT' : '';
+        ctx.fillText(statusShort, x + thermW / 2, y + thermH + 30);
+      }
     });
 
-    // Oxygen indicator (when in inertial mode)
-    if (ps.inertialMode) {
-      const oxy = ps.oxygenLevel;
-      let oxyColor = '#4f4';
-      if (oxy < 70) oxyColor = '#ff0';
-      if (oxy < 30) oxyColor = '#f44';
-      ctx.fillStyle = oxyColor;
-      ctx.font = '10px monospace';
-      ctx.fillText(`O₂: ${Math.round(oxy)}%`, px + 5, py - 5);
+    ctx.textAlign = 'left';
+
+    // OXYGEN METER (only when relevant — power off or O2 < 100)
+    if (ps.oxygenLevel < 100 || !ps.isPowered()) {
+      const oxR = startX + 3 * (thermW + gap) + 8;
+      const oxY = startY;
+      const oxW = 20;
+      const oxH = thermH;
+
+      // Label
+      ctx.fillStyle = ps.oxygenLevel < 30 ? '#f44' : '#4ff';
+      ctx.font = "bold 8px 'Press Start 2P', monospace";
+      ctx.textAlign = 'center';
+      ctx.fillText('O₂', oxR + oxW / 2, oxY - 6);
+
+      // Tank
+      ctx.fillStyle = 'rgba(20, 20, 30, 0.8)';
+      ctx.fillRect(oxR, oxY, oxW, oxH);
+      ctx.strokeStyle = '#444';
+      ctx.strokeRect(oxR, oxY, oxW, oxH);
+
+      // Fill
+      const oxPct = ps.oxygenLevel / 100;
+      const oxFillH = oxH * oxPct;
+      let oxColor = '#4ff';
+      if (ps.oxygenLevel < 70) oxColor = '#ff4';
+      if (ps.oxygenLevel < 30) oxColor = '#f44';
+      ctx.fillStyle = oxColor;
+      ctx.fillRect(oxR + 2, oxY + oxH - oxFillH + 2, oxW - 4, oxFillH - 4);
+
+      // Percentage
+      ctx.fillStyle = '#aaa';
+      ctx.font = '9px monospace';
+      ctx.fillText(`${Math.round(ps.oxygenLevel)}%`, oxR + oxW / 2, oxY + oxH + 14);
+      ctx.textAlign = 'left';
     }
 
-    // Power allocation hint
+    // === HEAT WARNING (center top) ===
+    let warningSystem = null;
+    let maxHeat = 0;
+    for (const sys of systems) {
+      if (ps.heat[sys.key] > maxHeat) {
+        maxHeat = ps.heat[sys.key];
+        warningSystem = sys;
+      }
+    }
+    if (maxHeat > 85 && warningSystem) {
+      const pulse = 0.4 + Math.sin(Date.now() / 200) * 0.4;
+      ctx.fillStyle = `rgba(255, 0, 0, ${pulse * 0.6})`;
+      ctx.fillRect(width / 2 - 140, 10, 280, 28);
+      ctx.fillStyle = '#fff';
+      ctx.font = "bold 12px 'Press Start 2P', monospace";
+      ctx.textAlign = 'center';
+      ctx.fillText(`⚠ ${warningSystem.label} OVERHEATING`, width / 2, 28);
+      ctx.textAlign = 'left';
+    }
+
+    // === SYSTEM FAILURE BANNER ===
+    for (const sys of systems) {
+      if (ps.status[sys.key] !== 'nominal') {
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+        ctx.fillRect(width / 2 - 160, 45, 320, 24);
+        ctx.fillStyle = '#fff';
+        ctx.font = "bold 11px 'Press Start 2P', monospace";
+        ctx.textAlign = 'center';
+        const tier = ps.status[sys.key].replace('_failure', '').toUpperCase();
+        ctx.fillText(`${sys.label} ${tier} FAILURE`, width / 2, 61);
+        ctx.textAlign = 'left';
+        break;
+      }
+    }
+
+    // Power allocation key hint
     if (ps.selectedSystem) {
       ctx.fillStyle = '#ff0';
-      ctx.font = '10px monospace';
+      ctx.font = "12px 'Press Start 2P', monospace";
       ctx.textAlign = 'center';
-      ctx.fillText(`${ps.selectedSystem.toUpperCase()}: press 0-9`, width / 2, height - 30);
+      ctx.fillText(`${ps.selectedSystem.toUpperCase()}: press 0-9`, width / 2, height - 100);
+      ctx.textAlign = 'left';
+    }
+
+    // === SUFFOCATION WARNING ===
+    if (ps.graceTimer > 0) {
+      const remaining = Math.max(0, 7 - ps.graceTimer).toFixed(1);
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+      ctx.fillRect(width / 2 - 200, height / 2 - 30, 400, 60);
+      ctx.fillStyle = '#fff';
+      ctx.font = "bold 16px 'Press Start 2P', monospace";
+      ctx.textAlign = 'center';
+      ctx.fillText('SUFFOCATING', width / 2, height / 2);
+      ctx.font = "10px 'Press Start 2P', monospace";
+      ctx.fillText(`${remaining}s — RESTORE POWER`, width / 2, height / 2 + 18);
       ctx.textAlign = 'left';
     }
   }

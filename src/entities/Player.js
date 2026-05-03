@@ -169,12 +169,17 @@ export class Player extends Entity {
     this.energy -= actualCost;
     playSFX('shoot');
 
+    // Weapon power scaling — affects damage and projectile speed
+    const wpnMult = this.powerSystem?.getWeaponPowerMultiplier() || 1.0;
+    const damage = this.projectileDamage * wpnMult;
+    const speed = GAME_CONFIG.PROJECTILES.SPEED * (0.7 + wpnMult * 0.3);
+
     const projectile = new Projectile(
       this.x + Math.cos(this.angle) * this.radius,
       this.y + Math.sin(this.angle) * this.radius,
       this.angle,
-      GAME_CONFIG.PROJECTILES.SPEED,
-      this.projectileDamage,
+      speed,
+      damage,
       true
     );
 
@@ -331,21 +336,6 @@ export class Player extends Entity {
 
     ctx.globalAlpha = 1;
     ctx.restore();
-
-    // Health bar
-    if (this.health < this.maxHealth) {
-      const barW = this.radius * 2;
-      ctx.fillStyle = 'black';
-      ctx.fillRect(this.x - barW / 2, this.y - this.radius - 12, barW, 5);
-      ctx.fillStyle = '#f44';
-      ctx.fillRect(this.x - barW / 2, this.y - this.radius - 12, barW * (this.health / this.maxHealth), 5);
-    }
-
-    // Energy bar
-    const barW = this.radius * 2;
-    ctx.fillStyle = '#444';
-    ctx.fillRect(this.x - barW / 2, this.y - this.radius - 6, barW, 3);
-    ctx.fillStyle = '#4af';
-    ctx.fillRect(this.x - barW / 2, this.y - this.radius - 6, barW * (this.energy / this.maxEnergy), 3);
+    // Health/energy displayed in HUD panel, not floating on ship
   }
 }
