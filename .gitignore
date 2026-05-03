@@ -46,3 +46,8 @@ coverage/
 *.tmp
 *.temp
 .cache/ 
+# Editor / IDE
+.cursor/
+.claude/
+smuglers-run@0.0.0
+vite
