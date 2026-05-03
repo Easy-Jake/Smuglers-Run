@@ -304,35 +304,90 @@ export class CollisionHandler {
   handlePlayerAsteroidCollision(player, asteroid) {
     if (player.invulnerable) return;
 
-    // Player uses velocity.x/y (Vector2D), asteroid uses vx/vy
-    const pvx = player.velocity ? player.velocity.x : 0;
-    const pvy = player.velocity ? player.velocity.y : 0;
-    const dvx = pvx - (asteroid.vx || 0);
-    const dvy = pvy - (asteroid.vy || 0);
-    const impact = Math.sqrt(dvx * dvx + dvy * dvy);
-    const damage = Math.max(1, Math.floor(impact * 3));
-
-    player.takeDamage(damage, this.gameState);
-    playSFX('hit');
-
-    // Screen shake proportional to damage
-    if (this.gameState._gameLoop) {
-      this.gameState._gameLoop._shakeIntensity = Math.min(20, damage * 2);
-    }
-
-    // Bounce player away from asteroid
+    // Calculate impact based on relative velocity along collision normal
     const dx = player.x - asteroid.x;
     const dy = player.y - asteroid.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const pushForce = 3;
+    const nx = dx / dist;
+    const ny = dy / dist;
+
+    const pvx = player.velocity ? player.velocity.x : 0;
+    const pvy = player.velocity ? player.velocity.y : 0;
+    const avx = asteroid.vx || 0;
+    const avy = asteroid.vy || 0;
+
+    // Relative velocity in collision direction
+    const relVx = pvx - avx;
+    const relVy = pvy - avy;
+    const relSpeed = relVx * nx + relVy * ny; // negative = approaching
+
+    // Only resolve collision if moving toward each other
+    if (relSpeed >= 0) return;
+
+    const impactSpeed = Math.abs(relSpeed);
+
+    // Damage scales with impact speed (squared for realism — higher speed hurts MORE)
+    // Threshold: under 0.5 speed = no damage (gentle bump)
+    const playerDamage = impactSpeed > 0.5 ? Math.max(1, Math.floor(impactSpeed * impactSpeed * 0.8)) : 0;
+    const asteroidDamage = impactSpeed > 0.5 ? Math.max(1, Math.floor(impactSpeed * 1.2)) : 0;
+
+    if (playerDamage > 0) {
+      player.takeDamage(playerDamage, this.gameState);
+      playSFX('hit');
+      // Screen shake proportional to damage
+      if (this.gameState._gameLoop) {
+        this.gameState._gameLoop._shakeIntensity = Math.min(15, playerDamage * 1.2);
+      }
+    }
+
+    // Asteroid takes damage too (proportional)
+    if (asteroidDamage > 0) {
+      const destroyed = asteroid.takeDamage(asteroidDamage);
+      if (destroyed) {
+        // Drop resources
+        const drops = asteroid.dropResources();
+        drops.forEach(r => this.gameState.addResource?.(r));
+        this.gameState.updateScore(10);
+        playSFX('explode');
+      }
+    }
+
+    // Elastic-ish collision response — asteroid is "heavier" so player bounces more
+    // Restitution = 0.4 (rocks aren't very bouncy, lose energy on impact)
+    const restitution = 0.4;
+    const playerMassRatio = 0.7;  // player gets most of the bounce
+    const asteroidMassRatio = 0.3; // asteroid gets some pushback
+
+    // Impulse along collision normal
+    const impulse = -(1 + restitution) * relSpeed;
+
+    // Apply impulse
     if (player.velocity) {
-      player.velocity = new Vector2D((dx / dist) * pushForce, (dy / dist) * pushForce);
+      player.velocity = new Vector2D(
+        pvx + impulse * playerMassRatio * nx,
+        pvy + impulse * playerMassRatio * ny
+      );
+    }
+
+    // Asteroid bounces away (smaller asteroids bounce more)
+    const sizeMod = asteroid.radius < 25 ? 1.2 : asteroid.radius < 40 ? 0.8 : 0.5;
+    asteroid.vx -= impulse * asteroidMassRatio * nx * sizeMod;
+    asteroid.vy -= impulse * asteroidMassRatio * ny * sizeMod;
+
+    // Separate the entities so they don't stick
+    const overlap = (player.radius + asteroid.radius) - dist;
+    if (overlap > 0) {
+      player.x += nx * overlap * 0.6;
+      player.y += ny * overlap * 0.6;
+      asteroid.x -= nx * overlap * 0.4;
+      asteroid.y -= ny * overlap * 0.4;
     }
 
     this.eventSystem.emit(EventTypes.COLLISION, {
       type: 'player_asteroid',
       entities: [player, asteroid],
-      damage
+      damage: playerDamage,
+      impactSpeed
     });
   }
 
