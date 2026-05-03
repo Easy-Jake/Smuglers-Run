@@ -326,23 +326,30 @@ export class CollisionHandler {
 
     const impactSpeed = Math.abs(relSpeed);
 
-    // Damage scales with impact speed (squared for realism — higher speed hurts MORE)
-    // Plus a density modifier per resource type — denser ores hurt more on impact
-    // Threshold: under 0.5 speed = no damage (gentle bump)
+    // Damage scales with impact speed AND resource type
+    // Curve: speed² × density × tier_factor
+    // tier_factor makes higher-tier ores HEAVILY punishing — early game can't ram them
     const DENSITY_MULT = {
-      hydro: 0.5,        // light gas — barely hurts
-      carbon: 0.8,
-      ferro: 1.2,        // metal — hurts more
-      silicrystal: 1.0,
-      titan: 1.5,        // dense titanium
-      nebula: 0.7,       // gas pocket
-      aurum: 1.8,        // dense metal
-      thorium: 2.0,      // heavy
-      darkmatter: 3.0,   // ouch
+      hydro: 0.3,        // light gas — barely hurts
+      carbon: 0.5,
+      ferro: 1.0,        // baseline iron
+      silicrystal: 1.5,  // sharp crystals
+      titan: 3.0,        // dense titanium
+      nebula: 0.8,       // gas pocket
+      aurum: 4.0,        // dense precious metal
+      thorium: 5.0,      // heavy + radiation aura
+      darkmatter: 8.0,   // do not touch without proper gear
     };
     const density = DENSITY_MULT[asteroid.resourceType] || 1.0;
-    const playerDamage = impactSpeed > 0.5 ? Math.max(1, Math.floor(impactSpeed * impactSpeed * 0.8 * density)) : 0;
-    const asteroidDamage = impactSpeed > 0.5 ? Math.max(1, Math.floor(impactSpeed * 1.2)) : 0;
+    // Threshold scales DOWN for harder ores — even slow contact with darkmatter hurts
+    const damageThreshold = Math.max(0.1, 0.5 / Math.max(1, density / 2));
+    const playerDamage = impactSpeed > damageThreshold
+      ? Math.max(1, Math.floor(impactSpeed * impactSpeed * density))
+      : 0;
+    // Asteroid takes proportionally less damage — high-tier rocks barely scratch
+    const asteroidDamage = impactSpeed > 0.5
+      ? Math.max(1, Math.floor(impactSpeed * 1.2 / Math.max(1, density / 2)))
+      : 0;
 
     if (playerDamage > 0) {
       player.takeDamage(playerDamage, this.gameState);

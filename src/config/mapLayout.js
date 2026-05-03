@@ -327,6 +327,16 @@ export const FIXED_STATIONS = [
 // Based on cosmic abundance (periodic table), most common → rarest
 // with sci-fi jargon sprinkled in
 
+// Resource definitions
+//
+// Each resource has:
+//   - sellPrice: market value per unit
+//   - tier: difficulty/zone tier (0 = free zone, 6 = post-jump)
+//   - impactDamage: ramming damage multiplier (heavier = more damage)
+//   - mineableWith: tools that can safely extract this
+//                   (blasters work on tier 0-1 only, drills for hard ores)
+//   - mineHazard: what happens if you use the wrong technique
+//   - requiresTool: tool needed for safe extraction (future gating)
 export const RESOURCE_TYPES = {
   hydro: {
     name: 'Hydro Cells',
@@ -336,6 +346,9 @@ export const RESOURCE_TYPES = {
     baseValue: 1,
     sellPrice: 3,
     tier: 0,
+    impactDamage: 0.3,
+    mineableWith: ['blaster', 'drill', 'gas_extractor'],
+    mineHazard: null,
     description: 'Compressed hydrogen — fuel and basic trade goods',
   },
   carbon: {
@@ -346,6 +359,9 @@ export const RESOURCE_TYPES = {
     baseValue: 2,
     sellPrice: 8,
     tier: 0,
+    impactDamage: 0.5,
+    mineableWith: ['blaster', 'drill'],
+    mineHazard: null,
     description: 'Processed carbon — building block of everything',
   },
   ferro: {
@@ -356,6 +372,9 @@ export const RESOURCE_TYPES = {
     baseValue: 5,
     sellPrice: 18,
     tier: 1,
+    impactDamage: 1.0,
+    mineableWith: ['blaster', 'drill'],
+    mineHazard: null,
     description: 'Salvageable iron-nickel alloy from debris fields',
   },
   silicrystal: {
@@ -366,8 +385,11 @@ export const RESOURCE_TYPES = {
     baseValue: 12,
     sellPrice: 45,
     tier: 2,
-    description: 'Crystallized silicon — used in advanced electronics',
-    // requiresTool: 'drill',
+    impactDamage: 1.5,
+    mineableWith: ['drill', 'precision_drill'],
+    mineHazard: { type: 'shatter', wrongTool: 'blaster', description: 'Shatters into worthless dust if blasted' },
+    requiresTool: 'drill',
+    description: 'Crystallized silicon — needs drill to extract intact',
   },
   titan: {
     name: 'Titan Ore',
@@ -377,8 +399,11 @@ export const RESOURCE_TYPES = {
     baseValue: 20,
     sellPrice: 85,
     tier: 3,
-    description: 'Dense titanium deposits — hull-grade material',
-    // requiresTool: 'heavy_drill',
+    impactDamage: 3.0,
+    mineableWith: ['drill', 'heavy_drill'],
+    mineHazard: { type: 'chip_damage', wrongTool: 'blaster', description: 'Too dense for blasters — wastes ammo' },
+    requiresTool: 'heavy_drill',
+    description: 'Dense titanium — hull-grade material, needs heavy drill',
   },
   nebula: {
     name: 'Nebula Extract',
@@ -388,8 +413,11 @@ export const RESOURCE_TYPES = {
     baseValue: 35,
     sellPrice: 150,
     tier: 3,
-    description: 'Volatile noble gases from nebula pockets',
-    // requiresTool: 'gas_collector',
+    impactDamage: 0.8,
+    mineableWith: ['gas_extractor'],
+    mineHazard: { type: 'toxic_release', wrongTool: 'any', description: 'Releases toxic gas if ruptured improperly' },
+    requiresTool: 'gas_extractor',
+    description: 'Volatile noble gases — needs vacuum extractor',
   },
   aurum: {
     name: 'Aurum Dust',
@@ -399,8 +427,11 @@ export const RESOURCE_TYPES = {
     baseValue: 60,
     sellPrice: 300,
     tier: 4,
-    description: 'Precious metal particles — extremely valuable',
-    // requiresTool: 'precision_extractor',
+    impactDamage: 4.0,
+    mineableWith: ['precision_drill'],
+    mineHazard: { type: 'shatter_loss', wrongTool: 'any_other', description: 'Dust scatters and is lost without precision tool' },
+    requiresTool: 'precision_drill',
+    description: 'Precious metal — fragile, needs precision extractor',
   },
   thorium: {
     name: 'Thorium Core',
@@ -410,8 +441,11 @@ export const RESOURCE_TYPES = {
     baseValue: 100,
     sellPrice: 500,
     tier: 5,
-    description: 'Radioactive fuel cores — powers jump drives',
-    // requiresTool: 'radiation_shield',
+    impactDamage: 5.0,
+    mineableWith: ['shielded_drill'],
+    mineHazard: { type: 'radiation_burst', wrongTool: 'any_other', description: 'Lethal radiation without shielded extractor' },
+    requiresTool: 'shielded_drill',
+    description: 'Radioactive fuel — powers jump drives, dangerous to mine',
   },
   darkmatter: {
     name: 'Dark Matter Fragment',
@@ -421,8 +455,11 @@ export const RESOURCE_TYPES = {
     baseValue: 500,
     sellPrice: 2000,
     tier: 6,
-    description: 'Unknown substance — bends spacetime',
-    // requiresTool: 'quantum_containment',
+    impactDamage: 8.0,
+    mineableWith: ['quantum_containment'],
+    mineHazard: { type: 'phase_loss', wrongTool: 'any_other', description: 'Phases out of normal space without containment' },
+    requiresTool: 'quantum_containment',
+    description: 'Unknown substance — bends spacetime, requires quantum tech',
   },
 };
 
