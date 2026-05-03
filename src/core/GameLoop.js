@@ -1156,24 +1156,56 @@ export class GameLoop {
     }
     y += 30;
 
-    // === ENERGY REFUEL ===
+    // === ENERGY REFUEL — pay per unit (gas pump style) ===
     ctx.fillStyle = '#4af';
     ctx.font = 'bold 13px Arial';
     ctx.fillText('REFUEL ENERGY', px + 15, y);
 
-    const cellCost = TC.PRICES.ENERGY_CELL;
-    const cellAmount = TC.PRICES.ENERGY_AMOUNT;
-    const canRefuel = player.energy < player.maxEnergy && player.credits >= cellCost;
+    const PRICE_PER_UNIT = 2; // 2 credits per energy unit
+    const energyNeeded = player.maxEnergy - player.energy;
+    const fullCost = Math.ceil(energyNeeded * PRICE_PER_UNIT);
+    const affordableUnits = Math.floor(player.credits / PRICE_PER_UNIT);
+    const fillUpUnits = Math.min(energyNeeded, affordableUnits);
+
     ctx.font = '11px Arial';
     ctx.fillStyle = '#aaa';
-    ctx.fillText(`+${cellAmount} energy for ${cellCost}cr`, px + 150, y);
+    ctx.fillText(`${PRICE_PER_UNIT}cr per unit · need ${Math.ceil(energyNeeded)} (${fullCost}cr)`, px + 130, y);
 
+    // +1 unit button
+    const unitCost = PRICE_PER_UNIT;
+    const canBuyUnit = player.credits >= unitCost && player.energy < player.maxEnergy;
+    this._drawTradeButton(ctx, px + panelW - 245, y - 13, 50, 22,
+      `+1`,
+      canBuyUnit ? '#246' : '#333', () => {
+        if (canBuyUnit) {
+          player.credits -= unitCost;
+          player.energy = Math.min(player.maxEnergy, player.energy + 1);
+          import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
+        }
+      });
+
+    // +10 button
+    const tenCost = PRICE_PER_UNIT * 10;
+    const canBuyTen = player.credits >= tenCost && player.energy < player.maxEnergy - 9;
+    this._drawTradeButton(ctx, px + panelW - 190, y - 13, 50, 22,
+      `+10`,
+      canBuyTen ? '#246' : '#333', () => {
+        if (canBuyTen) {
+          const units = Math.min(10, Math.floor(player.credits / PRICE_PER_UNIT), player.maxEnergy - player.energy);
+          player.credits -= units * PRICE_PER_UNIT;
+          player.energy = Math.min(player.maxEnergy, player.energy + units);
+          import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
+        }
+      });
+
+    // FILL UP button (max affordable)
+    const canFillUp = fillUpUnits > 0;
     this._drawTradeButton(ctx, px + panelW - 135, y - 13, 120, 22,
-      canRefuel ? 'REFUEL' : (player.energy >= player.maxEnergy ? 'FULL' : 'NO CREDITS'),
-      canRefuel ? '#448' : '#333', () => {
-        if (canRefuel) {
-          player.credits -= cellCost;
-          player.energy = Math.min(player.maxEnergy, player.energy + cellAmount);
+      player.energy >= player.maxEnergy ? 'FULL' : canFillUp ? `FILL UP (${fillUpUnits * PRICE_PER_UNIT}cr)` : 'NO CREDITS',
+      canFillUp ? '#448' : '#333', () => {
+        if (canFillUp) {
+          player.credits -= fillUpUnits * PRICE_PER_UNIT;
+          player.energy = Math.min(player.maxEnergy, player.energy + fillUpUnits);
           import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
         }
       });
