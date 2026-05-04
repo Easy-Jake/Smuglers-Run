@@ -1191,44 +1191,38 @@ export class GameLoop {
     ctx.fillStyle = '#aaa';
     ctx.fillText(`${PRICE_PER_UNIT}cr per unit · need ${Math.ceil(energyNeeded)} (${fullCost}cr)`, px + 130, y);
 
+    // Helper that re-checks state at click time (prevents double-charging from rapid clicks)
+    const buyEnergy = (maxUnits) => {
+      // Use CURRENT player state, not cached render-time values
+      const energyRoom = player.maxEnergy - player.energy;
+      const canAfford = Math.floor(player.credits / PRICE_PER_UNIT);
+      const units = Math.min(maxUnits, energyRoom, canAfford);
+      if (units <= 0) return;
+      player.credits -= units * PRICE_PER_UNIT;
+      player.energy = Math.min(player.maxEnergy, player.energy + units);
+      import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
+    };
+
     // +1 unit button
-    const unitCost = PRICE_PER_UNIT;
-    const canBuyUnit = player.credits >= unitCost && player.energy < player.maxEnergy;
+    const canBuyUnit = player.credits >= PRICE_PER_UNIT && player.energy < player.maxEnergy;
     this._drawTradeButton(ctx, px + panelW - 245, y - 13, 50, 22,
       `+1`,
-      canBuyUnit ? '#246' : '#333', () => {
-        if (canBuyUnit) {
-          player.credits -= unitCost;
-          player.energy = Math.min(player.maxEnergy, player.energy + 1);
-          import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
-        }
-      });
+      canBuyUnit ? '#246' : '#333',
+      () => buyEnergy(1));
 
     // +10 button
-    const tenCost = PRICE_PER_UNIT * 10;
-    const canBuyTen = player.credits >= tenCost && player.energy < player.maxEnergy - 9;
+    const canBuyTen = player.credits >= PRICE_PER_UNIT * 10 && player.energy < player.maxEnergy - 9;
     this._drawTradeButton(ctx, px + panelW - 190, y - 13, 50, 22,
       `+10`,
-      canBuyTen ? '#246' : '#333', () => {
-        if (canBuyTen) {
-          const units = Math.min(10, Math.floor(player.credits / PRICE_PER_UNIT), player.maxEnergy - player.energy);
-          player.credits -= units * PRICE_PER_UNIT;
-          player.energy = Math.min(player.maxEnergy, player.energy + units);
-          import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
-        }
-      });
+      canBuyTen ? '#246' : '#333',
+      () => buyEnergy(10));
 
     // FILL UP button (max affordable)
     const canFillUp = fillUpUnits > 0;
     this._drawTradeButton(ctx, px + panelW - 135, y - 13, 120, 22,
       player.energy >= player.maxEnergy ? 'FULL' : canFillUp ? `FILL UP (${fillUpUnits * PRICE_PER_UNIT}cr)` : 'NO CREDITS',
-      canFillUp ? '#448' : '#333', () => {
-        if (canFillUp) {
-          player.credits -= fillUpUnits * PRICE_PER_UNIT;
-          player.energy = Math.min(player.maxEnergy, player.energy + fillUpUnits);
-          import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
-        }
-      });
+      canFillUp ? '#448' : '#333',
+      () => buyEnergy(player.maxEnergy)); // re-checks at click time
     y += 30;
 
     // === REPAIR ===
@@ -1242,8 +1236,10 @@ export class GameLoop {
       ctx.fillText(`Full repair: ${repairCost}cr`, px + 150, y);
 
       this._drawTradeButton(ctx, px + panelW - 135, y - 13, 120, 22, 'REPAIR', '#a33', () => {
-        if (player.credits >= repairCost) {
-          player.credits -= repairCost;
+        // Re-check at click time
+        const cost = Math.ceil((player.maxHealth - player.health) * 2);
+        if (cost > 0 && player.credits >= cost) {
+          player.credits -= cost;
           player.health = player.maxHealth;
           import('../audio/SoundEngine.js').then(m => m.playSFX('dock'));
         }
@@ -1265,14 +1261,15 @@ export class GameLoop {
 
     // Two columns of upgrades
     const upgrades = [
-      { name: 'Cargo Hold', desc: '+20 capacity', id: 'CARGO', level: player.cargoCapacityLevel, fn: () => player.upgradeCargoCapacity(), effect: 'MOD' },
-      { name: 'Thrust Eff.', desc: 'Less energy/thrust', id: 'THRUST_EFFICIENCY', level: player.thrustEfficiencyLevel, fn: () => player.upgradeThrustEfficiency(), effect: 'EFF' },
-      { name: 'Ammo Eff.', desc: 'Less energy/shot', id: 'AMMO_EFFICIENCY', level: player.ammoEfficiencyLevel, fn: () => player.upgradeAmmoEfficiency(), effect: 'EFF' },
-      { name: 'Speed', desc: '+1 max speed', id: 'SPEED', level: player.speedLevel, fn: () => player.upgradeSpeed(), effect: 'PWR' },
-      { name: 'Pickup Range', desc: '+20% radius', id: 'RESOURCE_RANGE', level: player.resourceRangeLevel, fn: () => player.upgradeResourceRange(), effect: 'MOD' },
-      { name: 'Blaster Dmg', desc: '+25% damage', id: 'BLASTER_DAMAGE', level: player.blasterDamageLevel, fn: () => player.upgradeBlasterDamage(), effect: 'PWR' },
-      { name: 'Energy Tank', desc: '+25 max energy', id: 'CAPACITY', level: player.energyCapacityLevel || 1, fn: () => player.upgradeEnergyCapacity(), effect: 'MOD' },
+      { name: 'Cargo Hold', desc: '+20 capacity', id: 'CARGO', levelKey: 'cargoCapacityLevel', fn: () => player.upgradeCargoCapacity(), effect: 'MOD' },
+      { name: 'Thrust Eff.', desc: 'Less energy/thrust', id: 'THRUST_EFFICIENCY', levelKey: 'thrustEfficiencyLevel', fn: () => player.upgradeThrustEfficiency(), effect: 'EFF' },
+      { name: 'Ammo Eff.', desc: 'Less energy/shot', id: 'AMMO_EFFICIENCY', levelKey: 'ammoEfficiencyLevel', fn: () => player.upgradeAmmoEfficiency(), effect: 'EFF' },
+      { name: 'Speed', desc: '+1 max speed', id: 'SPEED', levelKey: 'speedLevel', fn: () => player.upgradeSpeed(), effect: 'PWR' },
+      { name: 'Pickup Range', desc: '+20% radius', id: 'RESOURCE_RANGE', levelKey: 'resourceRangeLevel', fn: () => player.upgradeResourceRange(), effect: 'MOD' },
+      { name: 'Blaster Dmg', desc: '+25% damage', id: 'BLASTER_DAMAGE', levelKey: 'blasterDamageLevel', fn: () => player.upgradeBlasterDamage(), effect: 'PWR' },
+      { name: 'Energy Tank', desc: '+25 max energy', id: 'CAPACITY', levelKey: 'energyCapacityLevel', fn: () => player.upgradeEnergyCapacity(), effect: 'MOD' },
     ];
+    upgrades.forEach(u => { u.level = player[u.levelKey] || 1; });
 
     const colW = (panelW - 40) / 2;
     for (let i = 0; i < upgrades.length; i++) {
@@ -1314,12 +1311,14 @@ export class GameLoop {
       ctx.fillText(`${cost}cr`, ux + colW - 5, uy + 13);
       ctx.textAlign = 'left';
 
-      // Click area for the whole card
+      // Click area for the whole card — re-check cost at click time
       this._tradeButtons.push({
         x: ux, y: uy, w: colW, h: 36,
         onClick: () => {
-          if (player.credits >= cost) {
-            player.credits -= cost;
+          const liveLevel = player[upg.levelKey] || 1;
+          const liveCost = TC.getUpgradeCost(upg.id, liveLevel);
+          if (player.credits >= liveCost) {
+            player.credits -= liveCost;
             upg.fn();
             import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
           }
