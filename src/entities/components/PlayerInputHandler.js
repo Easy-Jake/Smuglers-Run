@@ -52,7 +52,16 @@ export class PlayerInputHandler {
     this.controls = controls;
 
     const { rotateLeft, rotateRight, thrust, reverse, boost, jump } = controls;
-    const turnSpeed = this.player.rotationSpeed || 0.05;
+
+    // Rotation responsiveness scales with stabilizer
+    // Low stab = sluggish turning (50% speed), high stab = sharp (110% speed)
+    const ps = this.player.powerSystem;
+    const stabPower = ps?.allocation?.stabilizer || 0;
+    const stabHealthMult = (ps?.systemHealth?.stabilizer || 100) / 100;
+    const stabFactor = (stabPower / 9) * stabHealthMult;
+    const rotResponse = 0.5 + stabFactor * 0.6; // 0.5x at stab 0, 1.1x at stab 9
+    const baseRotSpeed = this.player.rotationSpeed || 0.05;
+    const turnSpeed = baseRotSpeed * rotResponse;
 
     // --- Rotation ---
     if (rotateLeft) {

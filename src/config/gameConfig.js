@@ -26,8 +26,8 @@ export const GAME_CONFIG = {
     MAX_HEALTH: 100,
     MAX_AMMO: 100,
     ENERGY_COST: {
-      THRUST: 0.15,             // costs more per thrust — energy management matters
-      SHOT: 8,                  // expensive shots — can't spam
+      THRUST: 0.05,             // ~3 energy/sec at default (was 9/sec — too brutal)
+      SHOT: 5,                  // cheaper shots
       SPEED_MULTIPLIER: 0.15,
       DAMAGE_MULTIPLIER: 0.2,
     },
@@ -50,9 +50,9 @@ export const GAME_CONFIG = {
 
   ASTEROIDS: {
     SIZES: {
-      small: { RADIUS: 15, HEALTH: 20, RESOURCE_VALUE: 5, RESOURCE_COUNT: { MIN: 3, MAX: 4 } },
-      medium: { RADIUS: 30, HEALTH: 40, RESOURCE_VALUE: 10, RESOURCE_COUNT: { MIN: 5, MAX: 7 } },
-      large: { RADIUS: 45, HEALTH: 60, RESOURCE_VALUE: 15, RESOURCE_COUNT: { MIN: 7, MAX: 8 } },
+      small: { RADIUS: 15, HEALTH: 20, RESOURCE_VALUE: 5, RESOURCE_COUNT: { MIN: 4, MAX: 6 } },
+      medium: { RADIUS: 30, HEALTH: 40, RESOURCE_VALUE: 10, RESOURCE_COUNT: { MIN: 6, MAX: 9 } },
+      large: { RADIUS: 45, HEALTH: 60, RESOURCE_VALUE: 15, RESOURCE_COUNT: { MIN: 9, MAX: 12 } },
     },
     MAX_RESOURCES: 8,
     BASE_SPEED: 0.2,
