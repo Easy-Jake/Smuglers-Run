@@ -77,12 +77,13 @@ const INERTIA = {
   GRACE_PERIOD_SECONDS: 7,
 };
 
-// Base idle drain — scales up with active power allocation
-// Total drain = BASE + (sum of allocations × ALLOC_DRAIN_FACTOR)
-// At default allocations (5+3+1 = 9): 0.001 + 9 × 0.0004 = 0.0046/frame ≈ 0.28/sec
-// 100 energy lasts ~6 min idle at default settings
+// Idle drain — scales as power^1.5 so low power is MUCH more efficient
+// Total drain = BASE + sum_of(alloc^1.5 × FACTOR) for each system
+// Default 5+3+1: 11.18 + 5.20 + 1.00 = 17.4 → ~0.30/sec  (5 min on full tank)
+// All low (1+1+1):  3.0 → ~0.06/sec (28 min on full tank)
+// All max (9+9+9): 81.0 → ~1.2/sec (1.4 min on full tank)
 const IDLE_BASE_DRAIN = 0.001;
-const ALLOC_DRAIN_FACTOR = 0.0004;
+const ALLOC_DRAIN_FACTOR = 0.00023;
 
 const BASE_START_PROBABILITY = 0.3;
 const MAX_START_ATTEMPTS = 5;
@@ -202,13 +203,14 @@ export class PowerSystem {
       this.oxygenLevel = Math.min(100, this.oxygenLevel + 30 * dt); // recover at 30%/sec when powered
     }
 
-    // Idle energy drain — scales with how much power is allocated to systems
-    // At default (5+3+1=9), drains ~0.55/sec. Cut all power to 0 and drain is just 0.12/sec.
-    const totalAlloc =
-      (this.allocation[SYSTEM_NAMES.ENGINES] || 0) +
-      (this.allocation[SYSTEM_NAMES.WEAPONS] || 0) +
-      (this.allocation[SYSTEM_NAMES.STABILIZER] || 0);
-    const drain = IDLE_BASE_DRAIN + totalAlloc * ALLOC_DRAIN_FACTOR;
+    // Idle energy drain — power^1.5 scaling makes low power MUCH cheaper
+    // Default 5+3+1: ~0.30/sec | All low 1+1+1: ~0.06/sec (5x cheaper)
+    // All max 9+9+9: ~1.2/sec (4x more expensive than default)
+    const drainSum =
+      Math.pow(this.allocation[SYSTEM_NAMES.ENGINES] || 0, 1.5) +
+      Math.pow(this.allocation[SYSTEM_NAMES.WEAPONS] || 0, 1.5) +
+      Math.pow(this.allocation[SYSTEM_NAMES.STABILIZER] || 0, 1.5);
+    const drain = IDLE_BASE_DRAIN + drainSum * ALLOC_DRAIN_FACTOR;
     this.player.energy = Math.max(0, this.player.energy - drain * dt * 60);
 
     // If energy hits 0 and we still have power, force shutdown
@@ -218,7 +220,13 @@ export class PowerSystem {
       return;
     }
 
-    // Process each system
+    // Process each system — heat asymptotes toward a target "ceiling"
+    // Power level sets the ceiling; active use boosts target above ceiling
+    //
+    // At power 0: ceiling = 0 (no heat ever)
+    // At power 50%: ceiling = 25 (always cool)
+    // At power 90% idle: ceiling = 81 (just below redline)
+    // At power 90% active: target = 122 → guaranteed redline if held
     for (const system of Object.values(SYSTEM_NAMES)) {
       // Handle recovery
       if (this.recoveryTimer[system] > 0) {
@@ -230,25 +238,26 @@ export class PowerSystem {
         continue;
       }
 
-      if (this.allocation[system] <= 0) continue;
+      const alloc = this.allocation[system] || 0;
+      const powerRatio = alloc / 10;
 
-      const powerRatio = this.allocation[system] / 10;
-      let usageMultiplier = 0.35; // idle heat — system running but not actively used
+      // Heat ceiling = power² × 100 (sharp curve)
+      const ceiling = powerRatio * powerRatio * 100;
 
-      // Active usage generates more heat
-      if (system === SYSTEM_NAMES.ENGINES && this.player.thrusting) {
-        usageMultiplier = 1.0;
-      } else if (system === SYSTEM_NAMES.WEAPONS && this.player.shootCooldown > 10) {
-        usageMultiplier = 1.0;
+      // Active use multiplier — pushes target above ceiling
+      let active = false;
+      if (alloc > 0) {
+        if (system === SYSTEM_NAMES.ENGINES && this.player.thrusting) active = true;
+        else if (system === SYSTEM_NAMES.WEAPONS && this.player.shootCooldown > 5) active = true;
       }
+      const targetHeat = active ? ceiling * 1.5 : ceiling;
 
-      const baseHeat = BASE_HEAT_GENERATION[system];
-      const heatGen = baseHeat * powerRatio * powerRatio * usageMultiplier * dt * 60;
-      this.heat[system] += heatGen;
-
-      // Cooling: less power = better cooling
-      const coolingFactor = 1 + (1 - powerRatio) * 0.5;
-      this.heat[system] = Math.max(0, this.heat[system] - HEAT_DISSIPATION * coolingFactor * dt * 60);
+      // Smooth approach toward target (slower for cooling, faster for heating)
+      const current = this.heat[system];
+      const diff = targetHeat - current;
+      // Heating rate: power dependent. Cooling rate: fixed (faster cooling)
+      const rate = diff > 0 ? 0.04 + powerRatio * 0.06 : 0.06; // 4-10% heating, 6% cooling per frame
+      this.heat[system] = Math.max(0, current + diff * rate * dt * 60);
 
       // Overheating check + damage to system
       if (this.heat[system] > REDLINE_THRESHOLD) {

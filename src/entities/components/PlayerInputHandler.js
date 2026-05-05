@@ -110,16 +110,26 @@ export class PlayerInputHandler {
   }
 
   _applyNormalThrust(basePower) {
-    const cost = (this.player.thrustCost || 0.1) / this.player.fuelEfficiency;
+    // Thrust cost scales with engine power — 10% engine = cheap, 90% = expensive
+    // engineRatio^1.5 gives sharp scaling: 10%=0.03, 50%=0.35, 90%=0.85
+    const ps = this.player.powerSystem;
+    const engineRatio = (ps?.allocation?.engines || 0) / 10;
+    const powerCostMult = Math.pow(engineRatio, 1.5);
+    const cost = (this.player.thrustCost || 0.1) * powerCostMult / this.player.fuelEfficiency;
     if (this.player.energy < cost) return;
     this.player.energy -= cost;
     this._applyThrust(basePower);
   }
 
   _applyReverseThrust(power) {
-    const cost = (this.player.thrustCost || 0.1) / this.player.fuelEfficiency;
+    const ps = this.player.powerSystem;
+    const engineRatio = (ps?.allocation?.engines || 0) / 10;
+    const powerCostMult = Math.pow(engineRatio, 1.5);
+    const cost = (this.player.thrustCost || 0.1) * powerCostMult / this.player.fuelEfficiency;
     if (this.player.energy < cost) return;
     this.player.energy -= cost;
+    // Mark thrusting so heat builds (was missing!)
+    this.player.thrusting = true;
     // Thrust opposite to facing direction
     const vec = new Vector2D(
       -Math.cos(this.player.rotation) * power,
