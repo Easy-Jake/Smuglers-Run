@@ -307,16 +307,25 @@ export class PowerSystem {
   }
 
   _updateBattery(dt) {
-    // Sum-squared aggregate of system heats (only count systems with heat > 5)
-    let aggregate = 0;
+    // Battery stress scales with NUMBER of active systems × their average heat
+    // 1 system at 60: target = 60 (yellow, safe)
+    // 2 systems at 60: target = 90 (over redline)
+    // 3 systems at 60: target = 120 (instant brownout)
+    // 1 system at 90: target = 100 (over redline alone)
+    // 2 systems at 90: target = 180 (instant brownout)
+    let totalHeat = 0;
+    let activeCount = 0;
     for (const system of Object.values(SYSTEM_NAMES)) {
       const h = this.heat[system] || 0;
       if (h > 5) {
-        aggregate += (h * h) * 0.5;
+        totalHeat += h;
+        activeCount++;
       }
     }
-    // Normalize: divide by 100 since heat is 0-100, cap at sensible range
-    const target = Math.min(200, aggregate / 100);
+    const avgHeat = activeCount > 0 ? totalHeat / activeCount : 0;
+    // Multi-system multiplier: 1 active = 1.0×, 2 = 1.5×, 3 = 2.0×
+    const multiSystemMult = 1 + 0.5 * Math.max(0, activeCount - 1);
+    const target = Math.min(200, avgHeat * multiSystemMult);
 
     // Smooth approach (battery has thermal mass — slower)
     const diff = target - this.batteryHeat;
