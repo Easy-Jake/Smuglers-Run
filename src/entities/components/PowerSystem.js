@@ -252,19 +252,31 @@ export class PowerSystem {
       }
       const targetHeat = active ? ceiling * 1.5 : ceiling;
 
-      // Smooth approach toward target (slower for cooling, faster for heating)
+      // Smooth approach toward target — slower so player has reaction time
+      // 90% active redlines in ~0.5 sec, plus 0.5 sec warning = ~1 sec to break
       const current = this.heat[system];
       const diff = targetHeat - current;
-      // Heating rate: power dependent. Cooling rate: fixed (faster cooling)
-      const rate = diff > 0 ? 0.04 + powerRatio * 0.06 : 0.06; // 4-10% heating, 6% cooling per frame
+      // Heating rate: 1.5-3% per frame (was 4-10%, way too fast)
+      // Cooling rate: 4% per frame (faster than heating, gives recovery)
+      const rate = diff > 0 ? 0.015 + powerRatio * 0.015 : 0.04;
       this.heat[system] = Math.max(0, current + diff * rate * dt * 60);
 
-      // Overheating check + damage to system
+      // Track time spent over redline for warning window
       if (this.heat[system] > REDLINE_THRESHOLD) {
+        this.redlineTimer = this.redlineTimer || {};
+        this.redlineTimer[system] = (this.redlineTimer[system] || 0) + dt;
+
         // Damage system from sustained heat
         const damageRate = (this.heat[system] - REDLINE_THRESHOLD) / 10;
         this.systemHealth[system] = Math.max(0, this.systemHealth[system] - damageRate * dt * 60);
-        this._checkStability(system);
+
+        // Only roll for failure AFTER 0.5 sec warning window
+        if (this.redlineTimer[system] > 0.5) {
+          this._checkStability(system);
+        }
+      } else {
+        // Reset warning timer when heat drops below redline
+        if (this.redlineTimer) this.redlineTimer[system] = 0;
       }
     }
   }

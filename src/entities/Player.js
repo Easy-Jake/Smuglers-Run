@@ -20,6 +20,7 @@ export class Player extends Entity {
     this.radius = PC.RADIUS;
     this.angle = -Math.PI / 2; // point up
     this.rotation = -Math.PI / 2;
+    this.rotationVelocity = 0; // rad/frame — sudo-Newtonian rotational inertia
     this.velocity = new Vector2D();
     this.active = true;
     this.thrusting = false;

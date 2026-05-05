@@ -810,6 +810,15 @@ export class GameLoop {
       ctx.fillStyle = heatColor;
       ctx.fillRect(x + halfW + 1, y + thermH - fillH + 1, halfW - 3, fillH - 2);
 
+      // PULSING WARNING when in redline window (before failure rolls)
+      const redlineTime = ps.redlineTimer?.[sys.key] || 0;
+      if (heat > 85 && redlineTime < 0.5) {
+        // Warning window — pulse the heat bar
+        const pulse = 0.5 + Math.sin(Date.now() / 60) * 0.5;
+        ctx.fillStyle = `rgba(255, 200, 0, ${pulse * 0.6})`;
+        ctx.fillRect(x + halfW + 1, y + thermH - fillH + 1, halfW - 3, fillH - 2);
+      }
+
       // Redline marker on heat side at 85%
       const redlineY = y + thermH - thermH * 0.85;
       ctx.strokeStyle = '#f00';
