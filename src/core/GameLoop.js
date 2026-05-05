@@ -740,12 +740,12 @@ export class GameLoop {
       { key: 'stabilizer', label: 'STB', color: '#4f4', accent: '#7f7' },
     ];
 
-    // Vertical thermometers on left side
-    const thermW = 26;
+    // Vertical thermometers on left side — wider to fit power bar + heat bar
+    const thermW = 38;
     const thermH = 200;
     const startY = 280; // below top-left HUD
     const startX = 12;
-    const gap = 4;
+    const gap = 6;
 
     systems.forEach((sys, i) => {
       const x = startX + i * (thermW + gap);
@@ -759,21 +759,47 @@ export class GameLoop {
       ctx.fillStyle = status === 'nominal' ? sys.color : '#f44';
       ctx.font = "bold 9px 'Press Start 2P', monospace";
       ctx.textAlign = 'center';
-      ctx.fillText(sys.label, x + thermW / 2, y - 6);
+      ctx.fillText(sys.label, x + thermW / 2, y - 14);
 
-      // Allocation % below label
-      ctx.fillStyle = '#aaa';
-      ctx.font = '9px monospace';
-      ctx.fillText(`${alloc * 10}%`, x + thermW / 2, y + thermH + 14);
+      // POWER % displayed prominently above bars
+      ctx.fillStyle = sys.color;
+      ctx.font = "bold 11px 'Press Start 2P', monospace";
+      ctx.fillText(`${alloc * 10}%`, x + thermW / 2, y - 2);
 
-      // Outer thermometer body (rounded rect look)
+      // Outer thermometer body
       ctx.fillStyle = 'rgba(20, 20, 30, 0.8)';
       ctx.fillRect(x, y, thermW, thermH);
       ctx.strokeStyle = '#444';
       ctx.lineWidth = 1;
       ctx.strokeRect(x, y, thermW, thermH);
 
-      // Heat fill (from bottom up)
+      // Divider between power bar (left) and heat bar (right)
+      const halfW = thermW / 2;
+      ctx.strokeStyle = '#222';
+      ctx.beginPath();
+      ctx.moveTo(x + halfW, y);
+      ctx.lineTo(x + halfW, y + thermH);
+      ctx.stroke();
+
+      // Mini-labels for the bars
+      ctx.fillStyle = '#666';
+      ctx.font = '7px monospace';
+      ctx.fillText('PWR', x + halfW / 2, y + thermH + 11);
+      ctx.fillText('HEAT', x + halfW + halfW / 2, y + thermH + 11);
+
+      // POWER FILL (left half, fills from bottom — system color)
+      const powerPct = alloc / 9;
+      const powerH = thermH * powerPct;
+      // Stripes effect to make it look "active"
+      ctx.fillStyle = sys.color;
+      ctx.fillRect(x + 2, y + thermH - powerH + 1, halfW - 3, powerH - 2);
+      // Subtle shine at top of power fill
+      if (powerPct > 0) {
+        ctx.fillStyle = sys.accent;
+        ctx.fillRect(x + 2, y + thermH - powerH + 1, halfW - 3, 2);
+      }
+
+      // HEAT FILL (right half, fills from bottom — heat color)
       const heatPct = Math.min(1, heat / 100);
       const fillH = thermH * heatPct;
       let heatColor = '#4CAF50';
@@ -782,27 +808,33 @@ export class GameLoop {
       if (heat > 85) heatColor = '#F44336';
       if (heat > 95) heatColor = '#9C27B0';
       ctx.fillStyle = heatColor;
-      ctx.fillRect(x + 2, y + thermH - fillH + 2, thermW - 4, fillH - 4);
+      ctx.fillRect(x + halfW + 1, y + thermH - fillH + 1, halfW - 3, fillH - 2);
 
-      // Redline marker at 85%
+      // Redline marker on heat side at 85%
       const redlineY = y + thermH - thermH * 0.85;
       ctx.strokeStyle = '#f00';
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 2]);
       ctx.beginPath();
-      ctx.moveTo(x, redlineY);
+      ctx.moveTo(x + halfW, redlineY);
       ctx.lineTo(x + thermW, redlineY);
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Power allocation indicator on right edge of thermometer
-      const allocY = y + thermH - thermH * (alloc / 9);
-      ctx.fillStyle = sys.accent;
-      ctx.fillRect(x + thermW, allocY - 2, 4, 4);
+      // Power level tick marks (every 10%) on power side for reference
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      ctx.lineWidth = 1;
+      for (let t = 1; t < 10; t++) {
+        const tickY = y + thermH - thermH * (t / 10);
+        ctx.beginPath();
+        ctx.moveTo(x + 1, tickY);
+        ctx.lineTo(x + halfW - 1, tickY);
+        ctx.stroke();
+      }
 
       // System damage bar at bottom
       if (sysHealth < 100) {
-        const dmgY = y + thermH + 18;
+        const dmgY = y + thermH + 22;
         ctx.fillStyle = '#400';
         ctx.fillRect(x, dmgY, thermW, 3);
         ctx.fillStyle = sysHealth < 30 ? '#f44' : sysHealth < 60 ? '#fa4' : '#ff4';
@@ -816,7 +848,7 @@ export class GameLoop {
         const statusShort = status === 'minor_failure' ? 'MIN'
           : status === 'major_failure' ? 'MAJ'
           : status === 'critical_failure' ? 'CRIT' : '';
-        ctx.fillText(statusShort, x + thermW / 2, y + thermH + 30);
+        ctx.fillText(statusShort, x + thermW / 2, y + thermH + 32);
       }
     });
 
