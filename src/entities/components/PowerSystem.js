@@ -31,14 +31,16 @@ const DEFAULT_ALLOCATIONS = {
   [SYSTEM_NAMES.STABILIZER]: 1,
 };
 
+// Heat generation per system (higher = builds faster)
+// Was: ENG 1.0, WPN 1.2, STB 0.5 — too gentle to feel
 const BASE_HEAT_GENERATION = {
-  [SYSTEM_NAMES.ENGINES]: 1.0,
-  [SYSTEM_NAMES.WEAPONS]: 1.2,
-  [SYSTEM_NAMES.STABILIZER]: 0.5,
+  [SYSTEM_NAMES.ENGINES]: 3.0,
+  [SYSTEM_NAMES.WEAPONS]: 4.0,
+  [SYSTEM_NAMES.STABILIZER]: 1.5,
 };
 
 const REDLINE_THRESHOLD = 85;
-const HEAT_DISSIPATION = 0.5;
+const HEAT_DISSIPATION = 0.4; // slower cooling — was 0.5
 
 const BASE_STABILITY = {
   [SYSTEM_NAMES.ENGINES]: 75,
@@ -230,7 +232,7 @@ export class PowerSystem {
       if (this.allocation[system] <= 0) continue;
 
       const powerRatio = this.allocation[system] / 10;
-      let usageMultiplier = 0.2; // idle heat
+      let usageMultiplier = 0.35; // idle heat — system running but not actively used
 
       // Active usage generates more heat
       if (system === SYSTEM_NAMES.ENGINES && this.player.thrusting) {
