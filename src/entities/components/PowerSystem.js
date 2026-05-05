@@ -25,6 +25,9 @@ export const SYSTEM_NAMES = {
   STABILIZER: 'stabilizer',
 };
 
+// Battery is a derived system — heat from total system load
+const BATTERY_REDLINE = 85;
+
 const DEFAULT_ALLOCATIONS = {
   [SYSTEM_NAMES.ENGINES]: 5,
   [SYSTEM_NAMES.WEAPONS]: 3,
@@ -145,6 +148,12 @@ export class PowerSystem {
     this.startAttempts = 0;
     this.lastStartAttempt = 0;
 
+    // Battery state — derived from system load
+    this.batteryHeat = 0;
+    this.batteryHealth = 100;       // 0 = battery dead, can't operate
+    this.batteryStatus = 'nominal'; // 'nominal' | 'brownout' | 'dead'
+    this.batteryRedlineTimer = 0;
+
     // Key sequence for power allocation (T/F/G then 0-9)
     this.selectedSystem = null;
     this.keySelectionTime = 0;
@@ -176,6 +185,11 @@ export class PowerSystem {
       this.brownoutAttempts = 0;
       this.oxygenLevel = 100;
       this.graceTimer = 0;
+      // Battery cools fast and recovers status
+      this.batteryHeat = Math.max(0, this.batteryHeat - 5 * dt * 60);
+      this.batteryHealth = Math.min(100, this.batteryHealth + 20 * dt);
+      if (this.batteryHealth > 50) this.batteryStatus = 'nominal';
+      this.batteryRedlineTimer = 0;
       return;
     }
 
@@ -284,6 +298,62 @@ export class PowerSystem {
         if (this.redlineTimer) this.redlineTimer[system] = 0;
       }
     }
+
+    // === BATTERY HEAT ===
+    // Aggregate heat = sum of (active_system_heats²) × 0.5
+    // Two systems at 60% active = ~65 (yellow zone)
+    // Two systems at 90% active = 162 (instant brownout!)
+    this._updateBattery(dt);
+  }
+
+  _updateBattery(dt) {
+    // Sum-squared aggregate of system heats (only count systems with heat > 5)
+    let aggregate = 0;
+    for (const system of Object.values(SYSTEM_NAMES)) {
+      const h = this.heat[system] || 0;
+      if (h > 5) {
+        aggregate += (h * h) * 0.5;
+      }
+    }
+    // Normalize: divide by 100 since heat is 0-100, cap at sensible range
+    const target = Math.min(200, aggregate / 100);
+
+    // Smooth approach (battery has thermal mass — slower)
+    const diff = target - this.batteryHeat;
+    const rate = diff > 0 ? 0.012 : 0.025; // slower heating, faster cooling
+    this.batteryHeat = Math.max(0, this.batteryHeat + diff * rate * dt * 60);
+
+    // Battery brownout when at redline for 0.5 sec
+    if (this.batteryHeat > BATTERY_REDLINE) {
+      this.batteryRedlineTimer += dt;
+      // Damage battery
+      const damageRate = (this.batteryHeat - BATTERY_REDLINE) / 15;
+      this.batteryHealth = Math.max(0, this.batteryHealth - damageRate * dt * 60);
+
+      if (this.batteryRedlineTimer > 0.5 && this.batteryStatus === 'nominal') {
+        // Trigger brownout — caps all systems at power 5
+        this.batteryStatus = 'brownout';
+        // Force-cap all allocations
+        for (const system of Object.values(SYSTEM_NAMES)) {
+          if (this.allocation[system] > 5) {
+            this.allocation[system] = 5;
+          }
+        }
+      }
+    } else {
+      this.batteryRedlineTimer = 0;
+      // Auto-recover battery from brownout when cool
+      if (this.batteryStatus === 'brownout' && this.batteryHeat < 50) {
+        this.batteryStatus = 'nominal';
+      }
+    }
+
+    // Battery dead = total shutdown
+    if (this.batteryHealth <= 0 && this.batteryStatus !== 'dead') {
+      this.batteryStatus = 'dead';
+      this.powerState = POWER_STATE.OFF;
+      this._shutdown();
+    }
   }
 
   // --- Power Toggle ---
@@ -309,7 +379,9 @@ export class PowerSystem {
   allocate(system, level) {
     if (level < 0 || level > 9) return false;
     if (!SYSTEM_NAMES[system.toUpperCase()] && !Object.values(SYSTEM_NAMES).includes(system)) return false;
-    this.allocation[system] = Math.max(0, Math.min(9, level));
+    // Battery brownout caps all systems at 5
+    const cap = this.batteryStatus === 'brownout' ? 5 : 9;
+    this.allocation[system] = Math.max(0, Math.min(cap, level));
     this.player.recalculateCosts?.();
     return true;
   }

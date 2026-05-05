@@ -738,6 +738,7 @@ export class GameLoop {
       { key: 'engines',    label: 'ENG', color: '#4af', accent: '#7cf' },
       { key: 'weapons',    label: 'WPN', color: '#fa4', accent: '#fc7' },
       { key: 'stabilizer', label: 'STB', color: '#4f4', accent: '#7f7' },
+      { key: 'battery',    label: 'BAT', color: '#ff4', accent: '#ff8', isBattery: true },
     ];
 
     // Vertical thermometers on left side — wider to fit power bar + heat bar
@@ -750,10 +751,13 @@ export class GameLoop {
     systems.forEach((sys, i) => {
       const x = startX + i * (thermW + gap);
       const y = startY;
-      const alloc = ps.allocation[sys.key];
-      const heat = ps.heat[sys.key];
-      const status = ps.status[sys.key];
-      const sysHealth = ps.systemHealth[sys.key];
+
+      // Battery uses different stats (health for "power", batteryHeat for heat)
+      const isBattery = sys.isBattery;
+      const alloc = isBattery ? Math.round(ps.batteryHealth / 10) : ps.allocation[sys.key];
+      const heat = isBattery ? Math.min(100, ps.batteryHeat) : ps.heat[sys.key];
+      const status = isBattery ? ps.batteryStatus : ps.status[sys.key];
+      const sysHealth = isBattery ? ps.batteryHealth : ps.systemHealth[sys.key];
 
       // Label at top
       ctx.fillStyle = status === 'nominal' ? sys.color : '#f44';
@@ -761,10 +765,11 @@ export class GameLoop {
       ctx.textAlign = 'center';
       ctx.fillText(sys.label, x + thermW / 2, y - 14);
 
-      // POWER % displayed prominently above bars
+      // POWER %/HEALTH displayed prominently above bars
       ctx.fillStyle = sys.color;
       ctx.font = "bold 11px 'Press Start 2P', monospace";
-      ctx.fillText(`${alloc * 10}%`, x + thermW / 2, y - 2);
+      const topVal = isBattery ? `${Math.round(ps.batteryHealth)}%` : `${alloc * 10}%`;
+      ctx.fillText(topVal, x + thermW / 2, y - 2);
 
       // Outer thermometer body
       ctx.fillStyle = 'rgba(20, 20, 30, 0.8)';
@@ -784,11 +789,12 @@ export class GameLoop {
       // Mini-labels for the bars
       ctx.fillStyle = '#666';
       ctx.font = '7px monospace';
-      ctx.fillText('PWR', x + halfW / 2, y + thermH + 11);
+      ctx.fillText(isBattery ? 'HP' : 'PWR', x + halfW / 2, y + thermH + 11);
       ctx.fillText('HEAT', x + halfW + halfW / 2, y + thermH + 11);
 
-      // POWER FILL (left half, fills from bottom — system color)
-      const powerPct = alloc / 9;
+      // POWER FILL (left half, fills from bottom)
+      // Battery shows health instead of power allocation
+      const powerPct = isBattery ? (ps.batteryHealth / 100) : (alloc / 9);
       const powerH = thermH * powerPct;
       // Stripes effect to make it look "active"
       ctx.fillStyle = sys.color;
@@ -811,7 +817,7 @@ export class GameLoop {
       ctx.fillRect(x + halfW + 1, y + thermH - fillH + 1, halfW - 3, fillH - 2);
 
       // PULSING WARNING when in redline window (before failure rolls)
-      const redlineTime = ps.redlineTimer?.[sys.key] || 0;
+      const redlineTime = isBattery ? (ps.batteryRedlineTimer || 0) : (ps.redlineTimer?.[sys.key] || 0);
       if (heat > 85 && redlineTime < 0.5) {
         // Warning window — pulse the heat bar
         const pulse = 0.5 + Math.sin(Date.now() / 60) * 0.5;
@@ -920,7 +926,32 @@ export class GameLoop {
 
     // === BROWNOUT BANNERS (more prominent than minor failures) ===
     let bannerY = 45;
+
+    // Battery brownout banner takes priority
+    if (ps.batteryStatus === 'brownout') {
+      const pulse = 0.6 + Math.sin(Date.now() / 150) * 0.4;
+      ctx.fillStyle = `rgba(255, 50, 50, ${pulse * 0.85})`;
+      ctx.fillRect(width / 2 - 200, bannerY, 400, 28);
+      ctx.fillStyle = '#fff';
+      ctx.font = "bold 12px 'Press Start 2P', monospace";
+      ctx.textAlign = 'center';
+      ctx.fillText('⚠ BATTERY BROWNOUT — POWER CAPPED AT 5', width / 2, bannerY + 18);
+      ctx.textAlign = 'left';
+      bannerY += 32;
+    }
+    if (ps.batteryStatus === 'dead') {
+      ctx.fillStyle = `rgba(255, 0, 0, 0.95)`;
+      ctx.fillRect(width / 2 - 200, bannerY, 400, 28);
+      ctx.fillStyle = '#fff';
+      ctx.font = "bold 12px 'Press Start 2P', monospace";
+      ctx.textAlign = 'center';
+      ctx.fillText('☠ BATTERY DEAD — TOTAL SHUTDOWN', width / 2, bannerY + 18);
+      ctx.textAlign = 'left';
+      bannerY += 32;
+    }
+
     for (const sys of systems) {
+      if (sys.isBattery) continue; // battery has its own banner above
       if (ps.isBrownedOut?.(sys.key)) {
         const pulse = 0.6 + Math.sin(Date.now() / 200) * 0.4;
         ctx.fillStyle = `rgba(255, 100, 0, ${pulse * 0.8})`;
