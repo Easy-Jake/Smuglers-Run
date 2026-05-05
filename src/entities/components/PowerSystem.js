@@ -77,11 +77,12 @@ const INERTIA = {
   GRACE_PERIOD_SECONDS: 7,
 };
 
-// Base idle drain is very small — scales up with active power allocation
+// Base idle drain — scales up with active power allocation
 // Total drain = BASE + (sum of allocations × ALLOC_DRAIN_FACTOR)
-// At default allocations (5+3+1 = 9): 0.002 + 9 × 0.0008 = 0.0092/frame ≈ 0.55/sec
-const IDLE_BASE_DRAIN = 0.002;
-const ALLOC_DRAIN_FACTOR = 0.0008;
+// At default allocations (5+3+1 = 9): 0.001 + 9 × 0.0004 = 0.0046/frame ≈ 0.28/sec
+// 100 energy lasts ~6 min idle at default settings
+const IDLE_BASE_DRAIN = 0.001;
+const ALLOC_DRAIN_FACTOR = 0.0004;
 
 const BASE_START_PROBABILITY = 0.3;
 const MAX_START_ATTEMPTS = 5;
