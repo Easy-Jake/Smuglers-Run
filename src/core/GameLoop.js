@@ -918,18 +918,32 @@ export class GameLoop {
       ctx.textAlign = 'left';
     }
 
-    // === SYSTEM FAILURE BANNER ===
+    // === BROWNOUT BANNERS (more prominent than minor failures) ===
+    let bannerY = 45;
     for (const sys of systems) {
-      if (ps.status[sys.key] !== 'nominal') {
+      if (ps.isBrownedOut?.(sys.key)) {
+        const pulse = 0.6 + Math.sin(Date.now() / 200) * 0.4;
+        ctx.fillStyle = `rgba(255, 100, 0, ${pulse * 0.8})`;
+        ctx.fillRect(width / 2 - 180, bannerY, 360, 26);
+        ctx.fillStyle = '#fff';
+        ctx.font = "bold 11px 'Press Start 2P', monospace";
+        ctx.textAlign = 'center';
+        const msg = sys.key === 'engines' ? 'ENGINE BROWNOUT — LIMP MODE'
+          : sys.key === 'weapons' ? 'WEAPON BROWNOUT — DEGRADED'
+          : 'STABILIZER BROWNOUT — DRIFT MODE';
+        ctx.fillText(msg, width / 2, bannerY + 17);
+        ctx.textAlign = 'left';
+        bannerY += 30;
+      } else if (ps.status[sys.key] !== 'nominal') {
         ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
-        ctx.fillRect(width / 2 - 160, 45, 320, 24);
+        ctx.fillRect(width / 2 - 160, bannerY, 320, 24);
         ctx.fillStyle = '#fff';
         ctx.font = "bold 11px 'Press Start 2P', monospace";
         ctx.textAlign = 'center';
         const tier = ps.status[sys.key].replace('_failure', '').toUpperCase();
-        ctx.fillText(`${sys.label} ${tier} FAILURE`, width / 2, 61);
+        ctx.fillText(`${sys.label} ${tier} FAILURE`, width / 2, bannerY + 16);
         ctx.textAlign = 'left';
-        break;
+        bannerY += 28;
       }
     }
 

@@ -162,13 +162,18 @@ export class PowerSystem {
     const dt = deltaTime; // already in seconds-ish from fixed timestep
 
     // While docked at a station, ship is on station power/air — no drain at all
-    // Heat and damage also dissipate faster while docked (station maintenance)
+    // Heat dissipates fast, brownouts cleared, system health restored
     if (this.player.isDocked) {
-      // Slow heat dissipation
       for (const system of Object.values(SYSTEM_NAMES)) {
         this.heat[system] = Math.max(0, this.heat[system] - HEAT_DISSIPATION * 2 * dt * 60);
       }
-      // Reset oxygen and grace timer
+      // Repair: clear brownouts, restore status, full system health
+      if (this.brownout) {
+        this.brownout.engines = false;
+        this.brownout.weapons = false;
+        this.brownout.stabilizer = false;
+      }
+      this.brownoutAttempts = 0;
       this.oxygenLevel = 100;
       this.graceTimer = 0;
       return;
@@ -394,20 +399,30 @@ export class PowerSystem {
   _applyFailureEffects(system, tier) {
     const p = this.player;
 
+    // Track brownout state — limits performance until restart attempts succeed
+    // or station repair
+    if (!this.brownout) this.brownout = { engines: false, weapons: false, stabilizer: false };
+
     switch (system) {
       case SYSTEM_NAMES.ENGINES:
         p.thrustPower *= 0.5;
         if (tier === 'MAJOR' || tier === 'CRITICAL') {
-          // Random velocity impulse
+          // Random velocity impulse — engine sputters
           if (p.velocity) {
             const impulse = new Vector2D((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2);
             p.velocity.addMut(impulse);
           }
+          // BROWNOUT: engine forced to limp mode
+          this.brownout.engines = true;
+          this.brownoutAttempts = (this.brownoutAttempts || 0) + 1;
         }
         break;
 
       case SYSTEM_NAMES.WEAPONS:
-        // Weapon failures increase shot cost (checked in shoot())
+        if (tier === 'MAJOR' || tier === 'CRITICAL') {
+          // BROWNOUT: weapons severely degraded
+          this.brownout.weapons = true;
+        }
         if (tier === 'CRITICAL') {
           p.takeDamage?.(5);
         }
@@ -416,6 +431,7 @@ export class PowerSystem {
       case SYSTEM_NAMES.STABILIZER:
         if (tier === 'MAJOR' || tier === 'CRITICAL') {
           this.enableInertialMode();
+          this.brownout.stabilizer = true;
         }
         break;
     }
@@ -425,7 +441,17 @@ export class PowerSystem {
     const p = this.player;
     if (system === SYSTEM_NAMES.ENGINES) {
       p.thrustPower = p.baseThrustPower || 0.2;
+      // Brownout persists past recovery until restart attempt succeeds
+      // (handled via attemptStart logic for engines)
+    } else if (this.brownout) {
+      // Weapons / stabilizer auto-recover from brownout when nominal
+      this.brownout[system] = false;
     }
+  }
+
+  // Check if a system is in brownout (severely degraded performance)
+  isBrownedOut(system) {
+    return this.brownout?.[system] || false;
   }
 
   _getStabilityPercent(system) {
@@ -494,6 +520,9 @@ export class PowerSystem {
   // --- Weapon failure check (call from Player.shoot) ---
 
   getWeaponCostMultiplier() {
+    if (this.isBrownedOut('weapons')) {
+      return 3.0; // triple cost during brownout
+    }
     if (this.status[SYSTEM_NAMES.WEAPONS] !== 'nominal') {
       return 2.0; // double cost during weapon failure
     }
@@ -501,19 +530,28 @@ export class PowerSystem {
   }
 
   // --- Engine power modifier (affects thrust) ---
-  // Scales dramatically: 0% = ~0.2x (almost dead in water), 90% = 2.0x (fast)
-  // Damaged engines are less effective
+  // Brownout = 5% effective speed, "limp home" mode
   getEnginePowerMultiplier() {
     const ratio = this.getPowerRatio(SYSTEM_NAMES.ENGINES);
     const healthMult = (this.systemHealth[SYSTEM_NAMES.ENGINES] || 100) / 100;
+    if (this.isBrownedOut('engines')) {
+      return 0.05 * healthMult; // brownout: 5% no matter the allocation
+    }
     return (0.2 + ratio * 2.0) * healthMult;
   }
 
-  // Weapon damage/cooldown scaling — more power = more damage but more heat
+  // Engine fuel cost multiplier — brownout doubles thrust cost
+  getEngineCostMultiplier() {
+    return this.isBrownedOut('engines') ? 2.0 : 1.0;
+  }
+
+  // Weapon damage scaling — brownout halves damage
   getWeaponPowerMultiplier() {
     const ratio = this.getPowerRatio(SYSTEM_NAMES.WEAPONS);
     const healthMult = (this.systemHealth[SYSTEM_NAMES.WEAPONS] || 100) / 100;
-    // 0% = 0.5x damage (won't fire), 90% = 1.6x damage
+    if (this.isBrownedOut('weapons')) {
+      return 0.5 * healthMult; // brownout: half damage
+    }
     return (0.5 + ratio * 1.2) * healthMult;
   }
 

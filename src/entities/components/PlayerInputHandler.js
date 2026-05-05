@@ -131,10 +131,12 @@ export class PlayerInputHandler {
   _applyNormalThrust(basePower) {
     // Thrust cost scales with engine power — 10% engine = cheap, 90% = expensive
     // engineRatio^1.5 gives sharp scaling: 10%=0.03, 50%=0.35, 90%=0.85
+    // Brownout state doubles cost (limping home)
     const ps = this.player.powerSystem;
     const engineRatio = (ps?.allocation?.engines || 0) / 10;
     const powerCostMult = Math.pow(engineRatio, 1.5);
-    const cost = (this.player.thrustCost || 0.1) * powerCostMult / this.player.fuelEfficiency;
+    const brownoutCostMult = ps?.getEngineCostMultiplier() || 1.0;
+    const cost = (this.player.thrustCost || 0.1) * powerCostMult * brownoutCostMult / this.player.fuelEfficiency;
     if (this.player.energy < cost) return;
     this.player.energy -= cost;
     this._applyThrust(basePower);
