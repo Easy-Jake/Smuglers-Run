@@ -38,20 +38,20 @@ export class PlayerInputHandler {
     this.player.rotation += this.player.rotationVelocity * dt;
     this.player.angle = this.player.rotation;
 
-    // Rotational friction — also affected by stabilizer
-    // Stab 0%: 0.998/frame (spins long time)
-    // Stab 50%: 0.96/frame (~2 sec to stop)
-    // Stab 90%: 0.85/frame (~0.5 sec)
-    let rotFriction = 0.998;
+    // Rotational friction — much higher baseline so ship doesn't spin like a top
+    // Stab 0%: 0.92/frame (stops in ~1 sec)
+    // Stab 50%: 0.85/frame (~0.5 sec)
+    // Stab 90%: 0.75/frame (~0.2 sec — snappy)
+    let rotFriction = 0.92;
     if (!inertial && ps) {
       const stabPower = ps.allocation?.stabilizer || 0;
       const stabHealthMult = (ps.systemHealth?.stabilizer || 100) / 100;
       const stabRatio = (stabPower / 9) * stabHealthMult;
-      rotFriction = 0.998 - stabRatio * 0.148; // 0.998 → 0.85
+      rotFriction = 0.92 - stabRatio * 0.17; // 0.92 → 0.75
     }
     this.player.rotationVelocity *= Math.pow(rotFriction, dt);
     // Clamp to zero if very small (avoid micro-drift)
-    if (Math.abs(this.player.rotationVelocity) < 0.0005) {
+    if (Math.abs(this.player.rotationVelocity) < 0.001) {
       this.player.rotationVelocity = 0;
     }
 
@@ -73,8 +73,9 @@ export class PlayerInputHandler {
     const stabPower = ps?.allocation?.stabilizer || 0;
     const stabHealthMult = (ps?.systemHealth?.stabilizer || 100) / 100;
     const stabFactor = (stabPower / 9) * stabHealthMult;
-    const rotResponse = 0.4 + stabFactor * 0.7; // 0.4x at stab 0, 1.1x at stab 9
-    const baseRotAccel = (this.player.rotationSpeed || 0.05) * 0.15; // accel per frame
+    const rotResponse = 0.6 + stabFactor * 0.6; // 0.6x at stab 0, 1.2x at stab 9
+    // Bigger impulse but it decays faster, so feels punchy not spinny
+    const baseRotAccel = (this.player.rotationSpeed || 0.05) * 0.5; // accel per frame
     const rotImpulse = baseRotAccel * rotResponse;
 
     // --- Rotation: add to velocity (not direct rotate) ===
@@ -121,9 +122,22 @@ export class PlayerInputHandler {
   }
 
   _applyBoost(basePower) {
-    const boostCost = GAME_CONFIG.SHIP.BOOST.FUEL_COST / this.player.fuelEfficiency;
-    if (this.player.energy < boostCost) return;
-    this.player.energy -= boostCost;
+    // Boost is a power-hungry, heat-spiking emergency thrust
+    // Cost scales with engine power level — high engine = much higher boost cost
+    const ps = this.player.powerSystem;
+    const engineRatio = (ps?.allocation?.engines || 0) / 10;
+    const powerCostMult = Math.pow(engineRatio, 1.5);
+    const baseCost = GAME_CONFIG.SHIP.BOOST.FUEL_COST / this.player.fuelEfficiency;
+    const cost = baseCost * (1 + powerCostMult * 2); // 1x at 0%, 2.7x at 90%
+    if (this.player.energy < cost) return;
+    this.player.energy -= cost;
+
+    // BOOST INSTANTLY SPIKES ENGINE HEAT — overheats almost immediately at high power
+    // Adds heat directly to engine on top of normal heating
+    if (ps?.heat) {
+      ps.heat.engines = (ps.heat.engines || 0) + 5;
+    }
+
     const boosted = basePower * GAME_CONFIG.SHIP.BOOST.MULTIPLIER;
     this._applyThrust(boosted);
   }

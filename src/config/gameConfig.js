@@ -91,8 +91,8 @@ export const GAME_CONFIG = {
 
   SHIP: {
     BOOST: {
-      FUEL_COST: 0.3,
-      MULTIPLIER: 1.5,
+      FUEL_COST: 0.6,    // base — scaled up by engine power in code
+      MULTIPLIER: 2.0,   // big speed gain to make it worth it
     },
   },
 
