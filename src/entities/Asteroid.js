@@ -204,6 +204,34 @@ export class Asteroid extends Entity {
     }
   }
 
+  /**
+   * Render a label with resource name + value when player is close
+   * Called from GameLoop with player distance
+   */
+  renderLabel(ctx, distToPlayer) {
+    if (!this.active || distToPlayer > 200) return;
+    const NAMES = {
+      hydro: 'Hydro', carbon: 'Carbon', ferro: 'Ferro', silicrystal: 'Sili-Crystal',
+      titan: 'Titan', nebula: 'Nebula', aurum: 'Aurum', thorium: 'Thorium', darkmatter: 'Dark Matter',
+    };
+    const PRICES = { hydro: 8, carbon: 15, ferro: 30, silicrystal: 45, titan: 85, nebula: 150, aurum: 300, thorium: 500, darkmatter: 2000 };
+    const name = NAMES[this.resourceType] || this.resourceType;
+    const value = PRICES[this.resourceType] || 0;
+
+    // Fade based on distance
+    const alpha = Math.min(1, (200 - distToPlayer) / 100);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = this.strokeColor;
+    ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(name, this.x, this.y - this.radius - 18);
+    ctx.fillStyle = '#ff0';
+    ctx.font = '9px monospace';
+    ctx.fillText(`${value}cr/unit`, this.x, this.y - this.radius - 6);
+    ctx.restore();
+  }
+
   collidesWith(entity) {
     const now = Date.now();
     if (now - this.lastCollisionTime < 500) return false;

@@ -225,6 +225,7 @@ export class GameLoop {
             this.gameState.score += resource.value;
             resource.active = false;
             import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
+            this.addPickupToast(resource.resourceType || 'carbon');
           }
         }
       }
@@ -436,6 +437,18 @@ export class GameLoop {
       // Draw player
       if (this.gameState.player) {
         drawEntity(this.gameState.player);
+
+        // Render asteroid labels when player is close (resource name + value)
+        const p = this.gameState.player;
+        for (const a of this.gameState.asteroids) {
+          if (!a.active || !a.renderLabel) continue;
+          const dx = a.x - p.x;
+          const dy = a.y - p.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 200) {
+            a.renderLabel(ctx, dist);
+          }
+        }
       }
 
       ctx.restore();
@@ -519,6 +532,112 @@ export class GameLoop {
       ctx.fillText('MUTED [M]', width / 2, 20);
       ctx.textAlign = 'left';
     }
+
+    // Cargo manifest — shows what's in the hold by type with values
+    this._renderCargoManifest(ctx, width, height);
+
+    // Recent pickup toast
+    this._renderPickupToast(ctx, width, height);
+  }
+
+  /**
+   * Render cargo manifest in top-left below HUD
+   */
+  _renderCargoManifest(ctx, width, height) {
+    const player = this.gameState.player;
+    if (!player?.cargoByType) return;
+    const cargo = player.cargoByType;
+    const types = Object.keys(cargo).filter(t => cargo[t] > 0);
+    if (types.length === 0) return;
+
+    const PRICES = { hydro: 8, carbon: 15, ferro: 30, silicrystal: 45, titan: 85, nebula: 150, aurum: 300, thorium: 500, darkmatter: 2000 };
+    const NAMES = { hydro: 'Hydro', carbon: 'Carbon', ferro: 'Ferro', silicrystal: 'Sili-Cry', titan: 'Titan', nebula: 'Nebula', aurum: 'Aurum', thorium: 'Thorium', darkmatter: 'DarkMtr' };
+    const COLORS = { hydro: '#aaddff', carbon: '#aaa', ferro: '#da8a44', silicrystal: '#8cf', titan: '#bbaaee', nebula: '#c8f', aurum: '#ffe44d', thorium: '#88ff88', darkmatter: '#fff' };
+
+    // Sort by value descending so most valuable shows first
+    types.sort((a, b) => (PRICES[b] || 0) - (PRICES[a] || 0));
+
+    // Position to the right of the thermometers (x = 12 + 4 thermometers × ~44 + margin)
+    const px = 12 + 4 * 44 + 16;
+    const py = 280;
+    const lineH = 16;
+    const panelW = 180;
+    const panelH = types.length * lineH + 28;
+
+    ctx.fillStyle = 'rgba(0, 0, 20, 0.7)';
+    ctx.fillRect(px, py, panelW, panelH);
+    ctx.strokeStyle = '#446';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px, py, panelW, panelH);
+
+    // Header
+    ctx.fillStyle = '#88f';
+    ctx.font = "bold 9px 'Press Start 2P', monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText('CARGO HOLD', px + 8, py + 14);
+
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    types.forEach((type, i) => {
+      const y = py + 28 + i * lineH;
+      const count = cargo[type];
+      const value = count * (PRICES[type] || 0);
+      // Color dot
+      ctx.fillStyle = COLORS[type] || '#fff';
+      ctx.fillRect(px + 8, y - 7, 6, 6);
+      // Name + count
+      ctx.fillStyle = '#fff';
+      ctx.font = '10px monospace';
+      ctx.fillText(`${NAMES[type] || type} ×${count}`, px + 20, y);
+      // Value
+      ctx.fillStyle = '#ff0';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${value}cr`, px + panelW - 8, y);
+      ctx.textAlign = 'left';
+    });
+  }
+
+  /**
+   * Render a fading toast for recent resource pickups
+   */
+  _renderPickupToast(ctx, width, height) {
+    if (!this._pickupToasts || this._pickupToasts.length === 0) return;
+    const now = Date.now();
+    // Remove expired
+    this._pickupToasts = this._pickupToasts.filter(t => now - t.time < 2000);
+
+    const PRICES = { hydro: 8, carbon: 15, ferro: 30, silicrystal: 45, titan: 85, nebula: 150, aurum: 300, thorium: 500, darkmatter: 2000 };
+    const NAMES = { hydro: 'Hydro Cells', carbon: 'Carbon', ferro: 'Ferro Scrap', silicrystal: 'Sili-Crystal', titan: 'Titan Ore', nebula: 'Nebula', aurum: 'Aurum', thorium: 'Thorium', darkmatter: 'Dark Matter' };
+    const COLORS = { hydro: '#aaddff', carbon: '#ddd', ferro: '#da8a44', silicrystal: '#8cf', titan: '#bbaaee', nebula: '#c8f', aurum: '#ffe44d', thorium: '#88ff88', darkmatter: '#fff' };
+
+    // Stack from bottom
+    this._pickupToasts.forEach((t, i) => {
+      const age = (now - t.time) / 2000;
+      const alpha = age < 0.7 ? 1 : 1 - (age - 0.7) / 0.3;
+      const y = height - 200 - i * 22;
+      const value = PRICES[t.type] || 0;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(width / 2 - 110, y - 16, 220, 22);
+      ctx.fillStyle = COLORS[t.type] || '#fff';
+      ctx.font = "bold 12px 'Press Start 2P', monospace";
+      ctx.textAlign = 'center';
+      ctx.fillText(`+1 ${NAMES[t.type] || t.type} (+${value}cr)`, width / 2, y);
+      ctx.textAlign = 'left';
+      ctx.restore();
+    });
+  }
+
+  /**
+   * Add a pickup toast (called when collecting a resource)
+   */
+  addPickupToast(resourceType) {
+    if (!this._pickupToasts) this._pickupToasts = [];
+    this._pickupToasts.unshift({ type: resourceType, time: Date.now() });
+    // Cap to last 5
+    if (this._pickupToasts.length > 5) this._pickupToasts.length = 5;
   }
 
   /**
