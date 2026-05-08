@@ -37,8 +37,8 @@ export class Station extends Entity {
     this.dockingRequested = false;
     this.lastDockingAttempt = 0;
 
-    // Tractor beam
-    this.magneticForce = 0.05;
+    // Tractor beam — stronger pull for forgiving docking
+    this.magneticForce = 0.12;
 
     // Station sprite image
     this.image = null;
@@ -100,6 +100,18 @@ export class Station extends Entity {
     this.shipInDockingZone = dist < this.dockingRadius;
     this.shipTooFast = speed > this.maxDockingSpeed;
 
+    // Passive approach assist — gently brake when in approach zone (and not locked)
+    // Prevents drifting past the station unintentionally
+    if (this.shipApproaching && !this.locked && ship.velocity) {
+      const approachFactor = 1 - (dist / this.approachRadius); // 0 at edge, 1 at center
+      // Brake stronger the closer you get, but don't completely stop motion
+      const brakeStrength = 0.992 - approachFactor * 0.025; // 0.992 → 0.967
+      ship.velocity = new ship.velocity.constructor(
+        ship.velocity.x * brakeStrength,
+        ship.velocity.y * brakeStrength,
+      );
+    }
+
     // Can't dock at locked stations
     if (this.locked) {
       this.dockingRequested = false;
@@ -109,6 +121,12 @@ export class Station extends Entity {
     if (!this.shipInDockingZone) {
       this.dockingSequenceActive = false;
       return false;
+    }
+
+    // Auto-trigger docking sequence if player is slow enough — no need to press E
+    // Only auto-engages once player is moving slowly inside docking zone
+    if (!this.dockingSequenceActive && !this.shipTooFast && speed < 1.0 && !this.dockingRequested) {
+      this.dockingSequenceActive = true;
     }
 
     if (this.shipTooFast && !this.dockingSequenceActive) {
