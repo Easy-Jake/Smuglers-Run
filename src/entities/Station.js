@@ -37,8 +37,8 @@ export class Station extends Entity {
     this.dockingRequested = false;
     this.lastDockingAttempt = 0;
 
-    // Tractor beam — stronger pull for forgiving docking
-    this.magneticForce = 0.12;
+    // Tractor beam — kicks in only when actively docking (E pressed)
+    this.magneticForce = 0.08;
 
     // Station sprite image
     this.image = null;
@@ -100,15 +100,18 @@ export class Station extends Entity {
     this.shipInDockingZone = dist < this.dockingRadius;
     this.shipTooFast = speed > this.maxDockingSpeed;
 
-    // Passive approach assist — gently brake when in approach zone (and not locked)
-    // Prevents drifting past the station unintentionally
+    // Soft gravitational pull — gentle tug toward station that grows with proximity
+    // Doesn't slow your velocity directly, just nudges you toward the center
+    // You can fly out if you thrust away — it's a gravity well, not a tractor beam
     if (this.shipApproaching && !this.locked && ship.velocity) {
       const approachFactor = 1 - (dist / this.approachRadius); // 0 at edge, 1 at center
-      // Brake stronger the closer you get, but don't completely stop motion
-      const brakeStrength = 0.992 - approachFactor * 0.025; // 0.992 → 0.967
+      // Gravity pull: very soft at edge, noticeable near center
+      const pullStrength = approachFactor * approachFactor * 0.04; // quadratic — soft far, stronger close
+      const nx = (this.x - ship.x) / (dist || 1);
+      const ny = (this.y - ship.y) / (dist || 1);
       ship.velocity = new ship.velocity.constructor(
-        ship.velocity.x * brakeStrength,
-        ship.velocity.y * brakeStrength,
+        ship.velocity.x + nx * pullStrength,
+        ship.velocity.y + ny * pullStrength,
       );
     }
 
@@ -121,12 +124,6 @@ export class Station extends Entity {
     if (!this.shipInDockingZone) {
       this.dockingSequenceActive = false;
       return false;
-    }
-
-    // Auto-trigger docking sequence if player is slow enough — no need to press E
-    // Only auto-engages once player is moving slowly inside docking zone
-    if (!this.dockingSequenceActive && !this.shipTooFast && speed < 1.0 && !this.dockingRequested) {
-      this.dockingSequenceActive = true;
     }
 
     if (this.shipTooFast && !this.dockingSequenceActive) {
