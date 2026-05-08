@@ -284,17 +284,32 @@ export class GameLoop {
     if (ePressed && !this._eHeld) {
       this._eHeld = true;
       if (player.isDocked) {
-        // Undock
+        // Undock — clear any pending dock requests so we don't auto-redock
         const station = this.gameState.currentStation;
         if (station) {
           player.startUndocking(station);
           this.gameState.tradingActive = false;
           this.gameState.currentStation = null;
         }
+        for (const s of this.gameState.stations) {
+          s.dockingRequested = false;
+          s.dockingSequenceActive = false;
+        }
       } else if (!player.isUndocking) {
-        // Request docking at nearest station
+        // Request docking only at the NEAREST station within docking radius
+        let nearest = null;
+        let nearestDist = Infinity;
         for (const station of this.gameState.stations) {
-          station.dockingRequested = true;
+          const dx = station.x - player.x;
+          const dy = station.y - player.y;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < station.dockingRadius && d < nearestDist) {
+            nearest = station;
+            nearestDist = d;
+          }
+        }
+        if (nearest) {
+          nearest.dockingRequested = true;
         }
       }
     }
