@@ -33,27 +33,9 @@ export class PlayerInputHandler {
     }
     this.player.velocity.multiplyMut(Math.pow(friction, dt));
 
-    // === ROTATIONAL INERTIA ===
-    // Apply rotational velocity to rotation
-    this.player.rotation += this.player.rotationVelocity * dt;
+    // Sync angle for projectile direction
     this.player.angle = this.player.rotation;
-
-    // Rotational friction — much higher baseline so ship doesn't spin like a top
-    // Stab 0%: 0.92/frame (stops in ~1 sec)
-    // Stab 50%: 0.85/frame (~0.5 sec)
-    // Stab 90%: 0.75/frame (~0.2 sec — snappy)
-    let rotFriction = 0.92;
-    if (!inertial && ps) {
-      const stabPower = ps.allocation?.stabilizer || 0;
-      const stabHealthMult = (ps.systemHealth?.stabilizer || 100) / 100;
-      const stabRatio = (stabPower / 9) * stabHealthMult;
-      rotFriction = 0.92 - stabRatio * 0.17; // 0.92 → 0.75
-    }
-    this.player.rotationVelocity *= Math.pow(rotFriction, dt);
-    // Clamp to zero if very small (avoid micro-drift)
-    if (Math.abs(this.player.rotationVelocity) < 0.001) {
-      this.player.rotationVelocity = 0;
-    }
+    // Rotational inertia disabled — kept rotationVelocity field for future use
 
     // Handle jump cooldown (shoot cooldown handled in Player.update)
     if (this.player.jumpCooldown > 0) {
@@ -67,31 +49,24 @@ export class PlayerInputHandler {
 
     const { rotateLeft, rotateRight, thrust, reverse, boost, jump } = controls;
 
-    // Rotation thrust scales with stabilizer (responsiveness when ACCELERATING rotation)
-    // Low stab still lets you spin up but slowly. High stab is snappy.
+    // Direct rotation — instant, responsive (no inertia)
+    // Stabilizer affects responsiveness: low stab = sluggish but no drift
     const ps = this.player.powerSystem;
     const stabPower = ps?.allocation?.stabilizer || 0;
     const stabHealthMult = (ps?.systemHealth?.stabilizer || 100) / 100;
     const stabFactor = (stabPower / 9) * stabHealthMult;
-    const rotResponse = 0.6 + stabFactor * 0.6; // 0.6x at stab 0, 1.2x at stab 9
-    // Bigger impulse but it decays faster, so feels punchy not spinny
-    const baseRotAccel = (this.player.rotationSpeed || 0.05) * 0.5; // accel per frame
-    const rotImpulse = baseRotAccel * rotResponse;
+    const rotResponse = 0.6 + stabFactor * 0.6; // 0.6× at stab 0, 1.2× at stab 9
+    const turnSpeed = (this.player.rotationSpeed || 0.05) * rotResponse;
 
-    // --- Rotation: add to velocity (not direct rotate) ===
-    // Holding left = constant negative rotational thrust
-    // Holding right = positive
-    // Pressing opposite to spin = brake
+    // Stop any leftover rotational velocity from old system
+    this.player.rotationVelocity = 0;
+
     if (rotateLeft) {
-      this.player.rotationVelocity -= rotImpulse;
+      this.player.rotation -= turnSpeed;
     }
     if (rotateRight) {
-      this.player.rotationVelocity += rotImpulse;
+      this.player.rotation += turnSpeed;
     }
-    // Cap rotational velocity to prevent dizzy spin
-    const maxRotVel = (this.player.rotationSpeed || 0.05) * 2;
-    if (this.player.rotationVelocity > maxRotVel) this.player.rotationVelocity = maxRotVel;
-    if (this.player.rotationVelocity < -maxRotVel) this.player.rotationVelocity = -maxRotVel;
 
     // --- Thrust ---
     // Engine power allocation affects thrust strength
