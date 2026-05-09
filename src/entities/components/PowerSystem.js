@@ -202,9 +202,11 @@ export class PowerSystem {
           // Grace period — N seconds of suffocation before death
           this.graceTimer += dt;
           if (this.graceTimer >= INERTIA.GRACE_PERIOD_SECONDS) {
-            // Player dies from suffocation
-            if (this.player.takeDamage) {
-              this.player.takeDamage(999, this.player._gameState);
+            // Player dies from suffocation — call gameOver directly via gameLoop ref
+            this.player.health = 0;
+            const gs = this.player._gameLoop?.gameState || window.__gameState;
+            if (gs && !gs.isGameOver) {
+              gs.gameOver?.();
             }
           } else {
             // Damage from suffocation as warning

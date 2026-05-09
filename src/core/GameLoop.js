@@ -188,6 +188,11 @@ export class GameLoop {
   fixedUpdate(deltaTime) {
     if (this.gameState.isPaused || this.gameState.isGameOver) return;
 
+    // Ensure player has back-reference for emergency gameOver triggers
+    if (this.gameState.player && !this.gameState.player._gameLoop) {
+      this.gameState.player._gameLoop = this;
+    }
+
     // Update game state
     this.gameState.update(deltaTime);
 

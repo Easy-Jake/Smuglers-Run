@@ -234,11 +234,31 @@ export class GameState {
   }
 
   gameOver() {
+    if (this.isGameOver) return; // already game over, don't double-fire
     this.isGameOver = true;
+
     // Calculate final stats
     const finalScore = this.score;
     const creditsEarned = this.credits;
-    const timeSurvived = Math.floor(this.gameTime / 60); // Convert frames to seconds
+    const timeSurvived = Math.floor(this.gameTime);
+
+    // Save best run to localStorage (persistent across browser reloads)
+    let best = { score: 0, credits: 0, time: 0 };
+    try {
+      best = JSON.parse(localStorage.getItem('smugRunBest') || '{}');
+    } catch (e) {}
+    const isNewBest = finalScore > (best.score || 0);
+    if (isNewBest) {
+      try {
+        localStorage.setItem('smugRunBest', JSON.stringify({
+          score: finalScore,
+          credits: creditsEarned,
+          time: timeSurvived,
+          date: new Date().toISOString(),
+        }));
+      } catch (e) {}
+    }
+    this.lastRun = { score: finalScore, credits: creditsEarned, time: timeSurvived, isNewBest, prevBest: best.score || 0 };
 
     // Update game over screen
     const elements = {
