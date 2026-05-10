@@ -1,6 +1,7 @@
 import { EventTypes } from '../ecs/events/EventTypes.js';
 import { Vector2D } from '../utils/Vector2D.js';
 import { playSFX } from '../audio/SoundEngine.js';
+import { eventLog } from '../utils/EventLog.js';
 
 /**
  * Handles collision detection and response between game entities
@@ -354,6 +355,9 @@ export class CollisionHandler {
     if (playerDamage > 0) {
       player.takeDamage(playerDamage, this.gameState);
       playSFX('hit');
+      eventLog.log('damage', `Hit by ${asteroid.resourceType || 'asteroid'} (${playerDamage}hp)`, {
+        target: 'player', amount: playerDamage, source: asteroid.resourceType, impactSpeed: impactSpeed.toFixed(2),
+      });
       // Screen shake proportional to damage
       if (this.gameState._gameLoop) {
         this.gameState._gameLoop._shakeIntensity = Math.min(15, playerDamage * 1.2);
@@ -455,6 +459,9 @@ export class CollisionHandler {
       });
 
       this.gameState.updateScore(10);
+      eventLog.log('mining', `Destroyed ${asteroid.sizeType || 'medium'} ${asteroid.resourceType || 'rock'} asteroid (${drops.length} drops)`, {
+        type: asteroid.resourceType, size: asteroid.sizeType, drops: drops.length,
+      });
 
       this.eventSystem.emit(EventTypes.COLLISION, {
         type: 'asteroid_destroyed',

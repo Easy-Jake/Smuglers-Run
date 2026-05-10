@@ -6,6 +6,7 @@ import { CollisionHandler } from './CollisionHandler.js';
 import { ZONES, RESOURCE_TYPES } from '../config/mapLayout.js';
 import { startMusic, toggleMute } from '../audio/SoundEngine.js';
 import * as TradingConfig from '../config/tradingConfig.js';
+import { eventLog } from '../utils/EventLog.js';
 
 /**
  * Manages the main game loop with fixed timestep
@@ -91,6 +92,8 @@ export class GameLoop {
 
     // Start background music
     startMusic();
+    // Begin event log session
+    eventLog.startSession();
     
     this.isRunning = true;
     this.lastTime = performance.now();
@@ -213,6 +216,11 @@ export class GameLoop {
           player.isDocked = true;
           this.gameState.currentStation = station;
           this.gameState.tradingActive = true;
+          eventLog.log('docking', `Docked at ${station.stationName}`, {
+            action: 'docked', station: station.stationName,
+            cargoValue: player.getCargoValue?.() || 0,
+            credits: player.credits, energy: Math.round(player.energy),
+          });
         }
       }
     }
@@ -231,6 +239,9 @@ export class GameLoop {
             resource.active = false;
             import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
             this.addPickupToast(resource.resourceType || 'carbon');
+            eventLog.log('mining', `Picked up ${resource.resourceType || 'resource'}`, {
+              type: resource.resourceType, count: 1, value: resource.value,
+            });
           }
         }
       }
@@ -277,6 +288,21 @@ export class GameLoop {
     }
     if (!im.isKeyPressed('d') && !im.isKeyPressed('D')) this._dHeld = false;
 
+    // L key — event log overlay
+    if (im.isKeyPressed('l') && !this._lHeld && !this.gameState.tradingActive) {
+      this._lHeld = true;
+      this._showLog = !this._showLog;
+      if (this._showLog) eventLog.dump(30); // also dump to console
+    }
+    if (!im.isKeyPressed('l') && !im.isKeyPressed('L')) this._lHeld = false;
+
+    // Shift+L = download log as JSON file
+    if (im.isKeyPressed('L') && im.isKeyPressed('Shift') && !this._downloadHeld) {
+      this._downloadHeld = true;
+      eventLog.download();
+    }
+    if (!im.isKeyPressed('L')) this._downloadHeld = false;
+
     if (this.gameState.isPaused) return;
 
     // If trading UI is open, block game input
@@ -292,6 +318,10 @@ export class GameLoop {
         // Undock — clear any pending dock requests so we don't auto-redock
         const station = this.gameState.currentStation;
         if (station) {
+          eventLog.log('docking', `Undocked from ${station.stationName}`, {
+            action: 'undocked', station: station.stationName,
+            credits: player.credits, energy: Math.round(player.energy),
+          });
           player.startUndocking(station);
           this.gameState.tradingActive = false;
           this.gameState.currentStation = null;
@@ -505,6 +535,10 @@ export class GameLoop {
       }
 
       // Debug overlay (D)
+      if (this._showLog) {
+        this._renderEventLog(ctx, width, height);
+      }
+
       if (this._showDebug) {
         this._renderDebug(ctx, width, height);
       }
@@ -1251,6 +1285,59 @@ export class GameLoop {
     ctx.textAlign = 'center';
     ctx.fillText('SYSTEM MAP — Press Tab to close', width / 2, 25);
     ctx.textAlign = 'left';
+  }
+
+  /**
+   * Render event log overlay (L key) — shows last N gameplay events
+   */
+  _renderEventLog(ctx, width, height) {
+    const panelW = 460;
+    const panelH = Math.min(height - 100, 500);
+    const px = (width - panelW) / 2;
+    const py = 60;
+
+    // Background
+    ctx.fillStyle = 'rgba(0, 0, 10, 0.92)';
+    ctx.fillRect(px, py, panelW, panelH);
+    ctx.strokeStyle = '#446';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px, py, panelW, panelH);
+
+    // Header
+    ctx.fillStyle = '#4af';
+    ctx.font = "bold 12px 'Press Start 2P', monospace";
+    ctx.textAlign = 'center';
+    ctx.fillText('EVENT LOG — L close · Shift+L save JSON', px + panelW / 2, py + 18);
+
+    // Summary line
+    const summary = eventLog.summary();
+    ctx.fillStyle = '#888';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    const summaryY = py + 38;
+    ctx.fillText(`time: ${summary.sessionTime} | events: ${summary.totalEvents}`, px + 12, summaryY);
+    ctx.fillText(`dmg taken: ${summary.damageTaken.total}hp (${summary.damageTaken.hits} hits) | kills: ${summary.enemiesKilled} | docks: ${summary.docks}`, px + 12, summaryY + 12);
+    const mined = Object.entries(summary.resourcesMined || {})
+      .map(([t, c]) => `${t}:${c}`).join(' ');
+    if (mined) ctx.fillText(`mined: ${mined}`, px + 12, summaryY + 24);
+
+    // Events list (newest first)
+    ctx.font = '9px monospace';
+    const events = eventLog.events.slice(-30).reverse();
+    let lineY = py + 80;
+    const lineH = 11;
+    for (const e of events) {
+      if (lineY > py + panelH - 14) break;
+      const time = e.t.toFixed(1).padStart(6) + 's';
+      ctx.fillStyle = '#555';
+      ctx.fillText(time, px + 8, lineY);
+      ctx.fillStyle = eventLog.getCategoryColor(e.category);
+      ctx.fillText(e.category, px + 60, lineY);
+      ctx.fillStyle = '#ccc';
+      const msg = e.message.length > 50 ? e.message.slice(0, 47) + '...' : e.message;
+      ctx.fillText(msg, px + 130, lineY);
+      lineY += lineH;
+    }
   }
 
   /**

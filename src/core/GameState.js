@@ -237,6 +237,20 @@ export class GameState {
     if (this.isGameOver) return; // already game over, don't double-fire
     this.isGameOver = true;
 
+    // Determine cause of death from recent events
+    let cause = 'destroyed';
+    try {
+      const log = window.__eventLog;
+      if (log?.events?.length) {
+        const recent = log.events.slice(-10).reverse();
+        const last = recent.find(e => e.category === 'damage' || e.message.includes('suffocat'));
+        if (last) cause = last.data?.source || (last.message.includes('suffocat') ? 'suffocation' : 'damage');
+      }
+      log?.log('death', `Player died — ${cause} | final score ${this.score}`, {
+        cause, score: this.score, credits: this.credits, time: Math.floor(this.gameTime),
+      });
+    } catch (e) {}
+
     // Calculate final stats
     const finalScore = this.score;
     const creditsEarned = this.credits;

@@ -16,6 +16,7 @@
  */
 
 import { Vector2D } from '../../utils/Vector2D.js';
+import { eventLog } from '../../utils/EventLog.js';
 
 // --- Constants ---
 
@@ -475,6 +476,11 @@ export class PowerSystem {
     this.recoveryTimer[system] = FAILURE_RECOVERY[tier];
     this.status[system] = tier.toLowerCase() + '_failure';
     this.heat[system] = REDLINE_THRESHOLD / 2; // partial cooldown
+
+    eventLog.log('system', `${system.toUpperCase()} ${tier} failure`, {
+      system, tier, failure: true,
+      power: this.allocation[system],
+    });
 
     this._applyFailureEffects(system, tier);
   }
