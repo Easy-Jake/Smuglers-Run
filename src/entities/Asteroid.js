@@ -133,14 +133,50 @@ export class Asteroid extends Entity {
     }
   }
 
-  takeDamage(amount) {
-    const dmg = Math.max(1, amount - this.armor);
+  takeDamage(amount, source = 'blaster') {
+    // Tool gating — high-tier ores resist wrong tools
+    // Blasters do near-zero damage to crystal+, drill required to break through
+    const TOOL_EFFECTIVENESS = {
+      blaster: {
+        hydro: 1.0, carbon: 1.0, ferro: 0.9,
+        silicrystal: 0.1,  // blasters barely chip crystals (need drill)
+        titan: 0.05,       // titan is too dense for blasters
+        nebula: 0.3,       // gas pockets can vent if blasted (small damage)
+        aurum: 0.02,       // precious dust scatters
+        thorium: 0.05,     // radioactive — hazardous to blast
+        darkmatter: 0.0,   // immune to blasters
+      },
+      // Future: drill = full effectiveness on crystal/titan, hazard on gas
+      drill: {
+        hydro: 0.5, carbon: 0.7, ferro: 1.0,
+        silicrystal: 1.5, titan: 2.0, nebula: 0.3,
+        aurum: 1.5, thorium: 1.5, darkmatter: 0.5,
+      },
+    };
+    const effectiveness = TOOL_EFFECTIVENESS[source]?.[this.resourceType] ?? 1.0;
+    const baseDmg = Math.max(0, amount - this.armor);
+    const dmg = baseDmg * effectiveness;
     this.health -= dmg;
+    // Track minimum chip damage — even ineffective tools should leave a mark eventually
+    if (dmg < 0.5 && baseDmg > 0) {
+      this.health -= 0.1; // tiny chip
+    }
     if (this.health <= 0) {
       this.active = false;
       return true; // destroyed
     }
     return false;
+  }
+
+  // For UI: returns 'effective' / 'weak' / 'none' rating for given tool
+  toolEffectivenessFor(source) {
+    const TOOL_EFFECTIVENESS = {
+      blaster: { silicrystal: 0.1, titan: 0.05, aurum: 0.02, thorium: 0.05, darkmatter: 0.0 },
+    };
+    const eff = TOOL_EFFECTIVENESS[source]?.[this.resourceType] ?? 1.0;
+    if (eff >= 0.7) return 'effective';
+    if (eff >= 0.3) return 'weak';
+    return 'none';
   }
 
   /**
