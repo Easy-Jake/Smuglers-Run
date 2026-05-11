@@ -151,31 +151,37 @@ export class GameState {
     for (const [, zone] of Object.entries(ZONES)) {
       if (!zone.enemyTypes || zone.enemyCount === 0) continue;
 
-      for (let i = 0; i < zone.enemyCount; i++) {
+      // Give each enemy its OWN territory in the zone — divide the zone into sectors
+      // so enemies don't cluster in the center
+      const count = zone.enemyCount;
+      for (let i = 0; i < count; i++) {
+        // Each enemy gets a unique sector of the zone (evenly distributed)
+        const sectorAngle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.8;
+        const sectorDist = zone.radius * (0.4 + Math.random() * 0.4); // 40-80% out from center
+        const territoryCenter = {
+          x: zone.center.x + Math.cos(sectorAngle) * sectorDist,
+          y: zone.center.y + Math.sin(sectorAngle) * sectorDist,
+        };
+
         // Pick a random enemy type from the zone's allowed types
         const typeKey = zone.enemyTypes[Math.floor(Math.random() * zone.enemyTypes.length)];
         const tierConfig = ENEMY_TIERS[typeKey];
         if (!tierConfig) continue;
 
-        // Spawn position within zone radius
-        const angle = Math.random() * Math.PI * 2;
-        const dist = Math.random() * zone.radius * 0.8;
-        const sx = zone.center.x + Math.cos(angle) * dist;
-        const sy = zone.center.y + Math.sin(angle) * dist;
-
-        // Generate patrol waypoints within zone
+        // Patrol waypoints in this enemy's territory (small loop around territory center)
+        const territoryRadius = Math.min(400, zone.radius / 4);
         const waypoints = [];
         const wpCount = 3 + Math.floor(Math.random() * 2);
         for (let w = 0; w < wpCount; w++) {
-          const wa = Math.random() * Math.PI * 2;
-          const wd = Math.random() * zone.radius * 0.7;
+          const wa = (w / wpCount) * Math.PI * 2 + Math.random() * 0.5;
+          const wd = territoryRadius * (0.5 + Math.random() * 0.5);
           waypoints.push({
-            x: zone.center.x + Math.cos(wa) * wd,
-            y: zone.center.y + Math.sin(wa) * wd,
+            x: territoryCenter.x + Math.cos(wa) * wd,
+            y: territoryCenter.y + Math.sin(wa) * wd,
           });
         }
 
-        const enemy = new Enemy(sx, sy, {
+        const enemy = new Enemy(territoryCenter.x, territoryCenter.y, {
           enemyType: tierConfig.health > 60 ? 'heavy' : 'scout',
           waypoints,
         });
@@ -192,6 +198,7 @@ export class GameState {
         enemy.creditReward = tierConfig.creditReward;
         enemy.projectileDamage = tierConfig.damage;
         enemy.enemyTier = tierConfig.name;
+        enemy.territory = territoryCenter; // store for AI use
 
         this.enemies.push(enemy);
       }

@@ -87,12 +87,25 @@ export class Enemy extends Entity {
     // Stealth check — can't detect player if they're running dark
     const playerVisible = player.isPowered ? player.isPowered() : true;
 
+    // Aggro cap — only N enemies engage at once across the whole game state
+    // Others "stage" — close in but wait their turn
+    const MAX_ACTIVE_ATTACKERS = 2;
+    const activeAttackers = gameState?.enemies?.filter(e =>
+      e.active && (e.state === 'chase' || e.state === 'attack')
+    ).length || 0;
+
     // State machine
     switch (this.state) {
       case 'patrol':
         if (playerVisible && dist < this.sensorRange) {
-          this.state = 'chase';
-          this.target = player;
+          // Only become hostile if we're under the aggro cap, otherwise stay patrolling
+          if (activeAttackers < MAX_ACTIVE_ATTACKERS) {
+            this.state = 'chase';
+            this.target = player;
+          } else {
+            // Stage — move slowly toward player but don't fully engage
+            this._patrol(deltaTime);
+          }
         } else {
           this._patrol(deltaTime);
         }
@@ -100,7 +113,6 @@ export class Enemy extends Entity {
 
       case 'chase':
         if (!playerVisible || dist > this.sensorRange * 1.5) {
-          // Lost contact
           this.lastKnownTargetPos = { x: player.x, y: player.y };
           this.state = 'return';
         } else if (dist < this.attackRange) {
@@ -116,8 +128,10 @@ export class Enemy extends Entity {
         } else {
           // Strafe / orbit at attack range
           this._orbitTarget(player.x, player.y, this.attackRange * 0.8, deltaTime);
-          // Shoot
+          // Telegraph before shooting — pause briefly when first entering attack range
           if (this.shootCooldown <= 0) {
+            // Add small random spread so multiple enemies don't fire in sync
+            this.shootCooldown = -Math.random() * 20;
             this._shoot(player, gameState);
           }
         }
