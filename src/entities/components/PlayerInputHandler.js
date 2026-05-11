@@ -97,20 +97,25 @@ export class PlayerInputHandler {
   }
 
   _applyBoost(basePower) {
-    // Boost is a power-hungry, heat-spiking emergency thrust
-    // Cost scales with engine power level — high engine = much higher boost cost
+    // Boost = heat spike, modest fuel cost — punishment is heat/brownout, not empty tank
+    // Learn "don't boost when hot" without getting stranded
     const ps = this.player.powerSystem;
     const engineRatio = (ps?.allocation?.engines || 0) / 10;
-    const powerCostMult = Math.pow(engineRatio, 1.5);
-    const baseCost = GAME_CONFIG.SHIP.BOOST.FUEL_COST / this.player.fuelEfficiency;
-    const cost = baseCost * (1 + powerCostMult * 2); // 1x at 0%, 2.7x at 90%
-    if (this.player.energy < cost) return;
-    this.player.energy -= cost;
 
-    // BOOST INSTANTLY SPIKES ENGINE HEAT — overheats almost immediately at high power
-    // Adds heat directly to engine on top of normal heating
+    // Fuel cost: modest. Same as normal thrust × 1.5 (was up to 2.7×)
+    const powerCostMult = Math.pow(engineRatio, 1.5);
+    const baseCost = (this.player.thrustCost || 0.1) * powerCostMult * 1.5 / this.player.fuelEfficiency;
+    if (this.player.energy < baseCost) return;
+    this.player.energy -= baseCost;
+
+    // Heat spike scales DRAMATICALLY with engine power
+    // At 30% engine: +1 heat/frame (slow build)
+    // At 50% engine: +3 heat/frame (noticeable)
+    // At 70% engine: +6 heat/frame (redline in ~1 sec)
+    // At 90% engine: +10 heat/frame (instant redline)
     if (ps?.heat) {
-      ps.heat.engines = (ps.heat.engines || 0) + 5;
+      const heatSpike = 1 + Math.pow(engineRatio, 2) * 11;
+      ps.heat.engines = (ps.heat.engines || 0) + heatSpike;
     }
 
     const boosted = basePower * GAME_CONFIG.SHIP.BOOST.MULTIPLIER;
