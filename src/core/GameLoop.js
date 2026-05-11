@@ -246,6 +246,67 @@ export class GameLoop {
         }
       }
     }
+
+    // === GOVERNOR CHECK — uncle's leash until debt paid ===
+    if (player && player.debt > 0 && player.governorRadius < Infinity) {
+      const gdx = player.x - player.governorOrigin.x;
+      const gdy = player.y - player.governorOrigin.y;
+      const gdist = Math.sqrt(gdx * gdx + gdy * gdy);
+      const warningRadius = player.governorRadius * 0.85;
+
+      if (gdist > player.governorRadius && !player.governorViolating) {
+        // Crossed the line — dispatch repo ship
+        player.governorViolating = true;
+        this._spawnRepoShip(player);
+        eventLog.log('system', `Repo ship dispatched — you owe ${player.debt}cr`, {
+          repoDispatched: true, distance: Math.round(gdist),
+        });
+      } else if (gdist > warningRadius && !player.governorWarned) {
+        player.governorWarned = true;
+      } else if (gdist < warningRadius * 0.7) {
+        // Reset warning when well back inside
+        player.governorWarned = false;
+      }
+      // If player returned inside the radius, despawn repo ships
+      if (gdist < player.governorRadius * 0.9 && player.governorViolating) {
+        player.governorViolating = false;
+        const repoShips = this.gameState.enemies.filter(e => e.isRepoShip && e.active);
+        repoShips.forEach(s => { s.active = false; });
+        if (repoShips.length > 0) {
+          eventLog.log('system', 'Repo ships called off — you returned to Ricky\'s range', {});
+        }
+      }
+    }
+  }
+
+  _spawnRepoShip(player) {
+    // Spawn near player to give them no chance to escape easily
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 800;
+    const sx = player.x + Math.cos(angle) * dist;
+    const sy = player.y + Math.sin(angle) * dist;
+    // Lazy-import to avoid circular issues
+    import('../entities/Enemy.js').then(({ Enemy }) => {
+      const repo = new Enemy(sx, sy, {
+        enemyType: 'heavy',
+        waypoints: [{ x: player.x, y: player.y }],
+      });
+      repo.health = 60;
+      repo.maxHealth = 60;
+      repo.speed = 2.5; // FAST — hard to outrun
+      repo.maxSpeed = 2.5;
+      repo.damage = 12;
+      repo.sensorRange = 5000; // can find you anywhere
+      repo.attackRange = 350;
+      repo.shootRate = 50;
+      repo.creditReward = 0; // doesn't pay — just punishment
+      repo.projectileDamage = 12;
+      repo.isRepoShip = true;
+      repo.target = player;
+      repo.state = 'chase';
+      repo.enemyTier = 'Repo Ship';
+      this.gameState.enemies.push(repo);
+    });
   }
 
   /**
@@ -520,6 +581,9 @@ export class GameLoop {
       if (this.gameState.player?.isPowered && !this.gameState.player.isPowered()) {
         this._renderKillSwitchHUD(ctx, width, height);
       }
+
+      // Governor warning
+      this._renderGovernorWarning(ctx, width, height);
 
       // Draw minimap (top-right area, below Map Exploration)
       this._renderMinimap(ctx, width, height);
@@ -874,6 +938,20 @@ export class GameLoop {
         ctx.arc(ex, ey, 2, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+
+    // Governor radius circle (Uncle Ricky's leash)
+    if (p.debt > 0 && p.governorRadius < Infinity) {
+      const gx = mx + p.governorOrigin.x * scaleX;
+      const gy = my + p.governorOrigin.y * scaleY;
+      const gr = p.governorRadius * scaleX;
+      ctx.strokeStyle = p.governorViolating ? '#f00' : '#f80';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(gx, gy, gr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
     // Player (bright green dot)
@@ -1288,6 +1366,35 @@ export class GameLoop {
   }
 
   /**
+   * Render governor boundary warning (uncle's leash)
+   */
+  _renderGovernorWarning(ctx, width, height) {
+    const p = this.gameState.player;
+    if (!p || p.debt <= 0 || p.governorRadius >= Infinity) return;
+
+    if (p.governorViolating) {
+      // Crossed the line — repo ship warning
+      const pulse = 0.5 + Math.sin(Date.now() / 150) * 0.5;
+      ctx.fillStyle = `rgba(255, 0, 0, ${pulse * 0.85})`;
+      ctx.fillRect(width / 2 - 220, 80, 440, 30);
+      ctx.fillStyle = '#fff';
+      ctx.font = "bold 13px 'Press Start 2P', monospace";
+      ctx.textAlign = 'center';
+      ctx.fillText('⚠ REPO SHIP DISPATCHED — RETURN OR PAY', width / 2, 100);
+      ctx.textAlign = 'left';
+    } else if (p.governorWarned) {
+      // Approaching boundary
+      ctx.fillStyle = 'rgba(255, 140, 0, 0.7)';
+      ctx.fillRect(width / 2 - 200, 80, 400, 26);
+      ctx.fillStyle = '#fff';
+      ctx.font = "bold 11px 'Press Start 2P', monospace";
+      ctx.textAlign = 'center';
+      ctx.fillText('LEAVING RICKY\'S RANGE — TURN BACK', width / 2, 98);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  /**
    * Render event log overlay (L key) — shows last N gameplay events
    */
   _renderEventLog(ctx, width, height) {
@@ -1529,8 +1636,19 @@ export class GameLoop {
             player.credits -= payAll;
             player.debt -= payAll;
             import('../audio/SoundEngine.js').then(m => m.playSFX('dock'));
+            // Lift governor when debt is fully paid
+            if (player.debt <= 0) {
+              player.governorRadius = Infinity;
+              player.governorViolating = false;
+              player.governorWarned = false;
+              // Despawn any repo ships
+              this.gameState.enemies.forEach(e => { if (e.isRepoShip) e.active = false; });
+              // Unlock the next stations
+              const nextStation = this.gameState.stations.find(s => s.stationType === 'salvage');
+              if (nextStation) nextStation.locked = false;
+            }
             import('../utils/EventLog.js').then(m => {
-              m.eventLog.log('trade', player.debt === 0 ? "Debt paid off — Ricky's services unlocked!" : `Paid ${payAll}cr toward debt`,
+              m.eventLog.log('trade', player.debt === 0 ? "Debt paid off — governor lifted, Junkyard unlocked" : `Paid ${payAll}cr toward debt`,
                 { paid: payAll, remaining: player.debt, debtCleared: player.debt === 0 });
             });
           }
@@ -1541,15 +1659,6 @@ export class GameLoop {
     // === ENERGY REFUEL — pay per unit (gas pump style) ===
     if (!services.refuel) {
       // Skip refuel section entirely for stations that don't offer it
-    } else if (player.debt > 0 && services.debt) {
-      // Locked behind debt at starting station
-      ctx.fillStyle = '#666';
-      ctx.font = 'bold 13px Arial';
-      ctx.fillText('REFUEL ENERGY', px + 15, y);
-      ctx.font = '11px Arial';
-      ctx.fillStyle = '#888';
-      ctx.fillText('🔒 pay off debt to unlock', px + 150, y);
-      y += 30;
     } else {
     ctx.fillStyle = '#4af';
     ctx.font = 'bold 13px Arial';
@@ -1602,32 +1711,22 @@ export class GameLoop {
 
     // === REPAIR ===
     if (services.repair && player.health < player.maxHealth) {
-      const debtBlocked = player.debt > 0 && services.debt;
-      if (debtBlocked) {
-        ctx.fillStyle = '#666';
-        ctx.font = 'bold 13px Arial';
-        ctx.fillText('REPAIR HULL', px + 15, y);
-        ctx.font = '11px Arial';
-        ctx.fillStyle = '#888';
-        ctx.fillText('🔒 pay off debt to unlock', px + 150, y);
-      } else {
-        ctx.fillStyle = '#f44';
-        ctx.font = 'bold 13px Arial';
-        ctx.fillText('REPAIR HULL', px + 15, y);
-        const repairCost = Math.ceil((player.maxHealth - player.health) * 2);
-        ctx.font = '11px Arial';
-        ctx.fillStyle = '#aaa';
-        ctx.fillText(`Full repair: ${repairCost}cr`, px + 150, y);
+      ctx.fillStyle = '#f44';
+      ctx.font = 'bold 13px Arial';
+      ctx.fillText('REPAIR HULL', px + 15, y);
+      const repairCost = Math.ceil((player.maxHealth - player.health) * 2);
+      ctx.font = '11px Arial';
+      ctx.fillStyle = '#aaa';
+      ctx.fillText(`Full repair: ${repairCost}cr`, px + 150, y);
 
-        this._drawTradeButton(ctx, px + panelW - 135, y - 13, 120, 22, 'REPAIR', '#a33', () => {
-          const cost = Math.ceil((player.maxHealth - player.health) * 2);
-          if (cost > 0 && player.credits >= cost) {
-            player.credits -= cost;
-            player.health = player.maxHealth;
-            import('../audio/SoundEngine.js').then(m => m.playSFX('dock'));
-          }
-        });
-      }
+      this._drawTradeButton(ctx, px + panelW - 135, y - 13, 120, 22, 'REPAIR', '#a33', () => {
+        const cost = Math.ceil((player.maxHealth - player.health) * 2);
+        if (cost > 0 && player.credits >= cost) {
+          player.credits -= cost;
+          player.health = player.maxHealth;
+          import('../audio/SoundEngine.js').then(m => m.playSFX('dock'));
+        }
+      });
       y += 30;
     }
 
@@ -1638,17 +1737,9 @@ export class GameLoop {
     ctx.lineTo(px + panelW - 15, y - 5);
     ctx.stroke();
 
-    const upgradesLocked = player.debt > 0 && services.debt;
-
-    ctx.fillStyle = upgradesLocked ? '#666' : '#fa4';
+    ctx.fillStyle = '#fa4';
     ctx.font = 'bold 13px Arial';
-    ctx.fillText(upgradesLocked ? '🔒 UPGRADES' : 'UPGRADES', px + 15, y + 10);
-    if (upgradesLocked) {
-      ctx.font = '10px Arial';
-      ctx.fillStyle = '#888';
-      ctx.fillText('Pay off debt to access', px + 140, y + 10);
-      y += 30;
-    } else {
+    ctx.fillText('UPGRADES', px + 15, y + 10);
     y += 25;
 
     // All possible upgrades — will be filtered by station
@@ -1723,7 +1814,6 @@ export class GameLoop {
     }
 
     y += Math.ceil(upgrades.length / 2) * 42 + 15;
-    } // end upgrades else block
 
     // Close instructions
     ctx.fillStyle = '#555';

@@ -51,7 +51,13 @@ export class Player extends Entity {
 
     // Economy
     this.credits = PC.STARTING_CREDITS;
-    this.debt = PC.STARTING_DEBT || 0; // uncle's bill — locks station services until paid
+    this.debt = PC.STARTING_DEBT || 0;
+    // Governor — Ricky locks ship to a radius until debt paid
+    // Going past triggers a repo ship hunt
+    this.governorRadius = this.debt > 0 ? 4000 : Infinity;
+    this.governorOrigin = { x: 10000, y: 10000 }; // station center
+    this.governorWarned = false;
+    this.governorViolating = false;
     this.resources = 0;
     this.cargoCapacity = PC.INITIAL_CARGO_CAPACITY;
 
