@@ -51,6 +51,7 @@ export class Player extends Entity {
 
     // Economy
     this.credits = PC.STARTING_CREDITS;
+    this.debt = PC.STARTING_DEBT || 0; // uncle's bill — locks station services until paid
     this.resources = 0;
     this.cargoCapacity = PC.INITIAL_CARGO_CAPACITY;
 

@@ -56,6 +56,25 @@ export function getUpgradeCost(upgradeType, currentLevel) {
   return calculateUpgradeCost(base, currentLevel, z);
 }
 
+// Which upgrades each station type offers
+// Stations specialize — encourages travel to find what you need
+export const STATION_UPGRADES = {
+  trading: ['CARGO', 'THRUST_EFFICIENCY'],          // Uncle Ricky's — basic stuff
+  salvage: ['SPEED', 'RESOURCE_RANGE', 'CARGO'],    // Rusty's Junkyard — speed + scavenging
+  mining:  ['AMMO_EFFICIENCY', 'CAPACITY', 'CARGO'], // DeepCore — mining gear
+  bar:     ['BLASTER_DAMAGE', 'SPEED'],              // Maz's Bar — black market combat
+  gang_hq: ['BLASTER_DAMAGE', 'CAPACITY', 'CARGO'], // Gang HQ — endgame
+};
+
+// Services available per station type
+export const STATION_SERVICES = {
+  trading: { sell: true, refuel: true, repair: true, upgrades: true, debt: true },
+  salvage: { sell: true, refuel: true, repair: true, upgrades: true },
+  mining:  { sell: true, refuel: true, repair: true, upgrades: true },
+  bar:     { sell: true, refuel: false, repair: false, upgrades: true }, // bar doesn't refuel
+  gang_hq: { sell: true, refuel: true, repair: true, upgrades: true },
+};
+
 // All upgrade definitions for the trading UI
 export const UPGRADES = [
   {

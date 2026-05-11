@@ -11,7 +11,8 @@ export const GAME_CONFIG = {
   },
 
   PLAYER: {
-    STARTING_CREDITS: 50,       // barely enough for a couple energy cells
+    STARTING_CREDITS: 0,        // you're broke — uncle left debt
+    STARTING_DEBT: 500,         // owe Uncle Ricky for the patch job
     STARTING_HEALTH: 100,
     STARTING_ENERGY: 100,       // tight cap — every thrust counts
     STARTING_FUEL: 100,         // alias

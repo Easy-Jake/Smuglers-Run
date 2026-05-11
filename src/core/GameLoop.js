@@ -1417,17 +1417,21 @@ export class GameLoop {
     ctx.fillStyle = '#4af';
     ctx.fillText(station.stationType?.replace('_', ' ').toUpperCase() || '', px + panelW / 2, py + 40);
 
-    // Player stats bar
+    // Player stats bar (with debt indicator)
     ctx.font = '12px Arial';
     ctx.textAlign = 'left';
     ctx.fillStyle = '#ff0';
     ctx.fillText(`💰 ${player.credits}`, px + 15, py + 60);
     ctx.fillStyle = '#4f4';
-    ctx.fillText(`⚡ ${Math.floor(player.energy)}/${player.maxEnergy}`, px + 130, py + 60);
+    ctx.fillText(`⚡ ${Math.floor(player.energy)}/${player.maxEnergy}`, px + 110, py + 60);
     ctx.fillStyle = '#8bf';
-    ctx.fillText(`📦 ${player.resources}/${player.cargoCapacity}`, px + 280, py + 60);
+    ctx.fillText(`📦 ${player.resources}/${player.cargoCapacity}`, px + 240, py + 60);
     ctx.fillStyle = '#f88';
-    ctx.fillText(`❤️ ${Math.floor(player.health)}`, px + 420, py + 60);
+    ctx.fillText(`❤️ ${Math.floor(player.health)}`, px + 370, py + 60);
+    if (player.debt > 0) {
+      ctx.fillStyle = '#f44';
+      ctx.fillText(`📋 DEBT ${player.debt}`, px + 430, py + 60);
+    }
 
     // Divider
     ctx.strokeStyle = '#335';
@@ -1488,7 +1492,65 @@ export class GameLoop {
       y += 30;
     }
 
+    // Get station services + upgrade access from config
+    const services = TC.STATION_SERVICES?.[station.stationType] || { sell: true, refuel: true, repair: true, upgrades: true };
+    const allowedUpgradeIds = TC.STATION_UPGRADES?.[station.stationType] || [];
+
+    // === DEBT PAYMENT — only at the starting trading station, only if debt remains ===
+    if (services.debt && player.debt > 0) {
+      ctx.fillStyle = '#f44';
+      ctx.font = 'bold 13px Arial';
+      ctx.fillText("UNCLE'S DEBT", px + 15, y);
+
+      ctx.font = '11px Arial';
+      ctx.fillStyle = '#aaa';
+      ctx.fillText(`${player.debt}cr owed — pay off to unlock upgrades`, px + 130, y);
+
+      // Pay 100 button
+      const pay100 = Math.min(100, player.debt);
+      const canPay100 = player.credits >= pay100 && player.debt > 0;
+      this._drawTradeButton(ctx, px + panelW - 245, y - 13, 70, 22, `-${pay100}cr`,
+        canPay100 ? '#a33' : '#333', () => {
+          if (canPay100) {
+            player.credits -= pay100;
+            player.debt -= pay100;
+            import('../audio/SoundEngine.js').then(m => m.playSFX('pickup'));
+            import('../utils/EventLog.js').then(m => m.eventLog.log('trade', `Paid ${pay100}cr toward debt (${player.debt} left)`, { paid: pay100, remaining: player.debt }));
+          }
+        });
+
+      // Pay all button
+      const payAll = Math.min(player.credits, player.debt);
+      const canPayAll = payAll > 0;
+      this._drawTradeButton(ctx, px + panelW - 165, y - 13, 150, 22,
+        player.credits >= player.debt ? `PAY OFF (${player.debt}cr)` : `PAY ${payAll}cr`,
+        canPayAll ? '#c44' : '#333', () => {
+          if (canPayAll) {
+            player.credits -= payAll;
+            player.debt -= payAll;
+            import('../audio/SoundEngine.js').then(m => m.playSFX('dock'));
+            import('../utils/EventLog.js').then(m => {
+              m.eventLog.log('trade', player.debt === 0 ? "Debt paid off — Ricky's services unlocked!" : `Paid ${payAll}cr toward debt`,
+                { paid: payAll, remaining: player.debt, debtCleared: player.debt === 0 });
+            });
+          }
+        });
+      y += 35;
+    }
+
     // === ENERGY REFUEL — pay per unit (gas pump style) ===
+    if (!services.refuel) {
+      // Skip refuel section entirely for stations that don't offer it
+    } else if (player.debt > 0 && services.debt) {
+      // Locked behind debt at starting station
+      ctx.fillStyle = '#666';
+      ctx.font = 'bold 13px Arial';
+      ctx.fillText('REFUEL ENERGY', px + 15, y);
+      ctx.font = '11px Arial';
+      ctx.fillStyle = '#888';
+      ctx.fillText('🔒 pay off debt to unlock', px + 150, y);
+      y += 30;
+    } else {
     ctx.fillStyle = '#4af';
     ctx.font = 'bold 13px Arial';
     ctx.fillText('REFUEL ENERGY', px + 15, y);
@@ -1536,43 +1598,61 @@ export class GameLoop {
       canFillUp ? '#448' : '#333',
       () => buyEnergy(player.maxEnergy)); // re-checks at click time
     y += 30;
+    } // end refuel else block
 
     // === REPAIR ===
-    if (player.health < player.maxHealth) {
-      ctx.fillStyle = '#f44';
-      ctx.font = 'bold 13px Arial';
-      ctx.fillText('REPAIR HULL', px + 15, y);
-      const repairCost = Math.ceil((player.maxHealth - player.health) * 2);
-      ctx.font = '11px Arial';
-      ctx.fillStyle = '#aaa';
-      ctx.fillText(`Full repair: ${repairCost}cr`, px + 150, y);
+    if (services.repair && player.health < player.maxHealth) {
+      const debtBlocked = player.debt > 0 && services.debt;
+      if (debtBlocked) {
+        ctx.fillStyle = '#666';
+        ctx.font = 'bold 13px Arial';
+        ctx.fillText('REPAIR HULL', px + 15, y);
+        ctx.font = '11px Arial';
+        ctx.fillStyle = '#888';
+        ctx.fillText('🔒 pay off debt to unlock', px + 150, y);
+      } else {
+        ctx.fillStyle = '#f44';
+        ctx.font = 'bold 13px Arial';
+        ctx.fillText('REPAIR HULL', px + 15, y);
+        const repairCost = Math.ceil((player.maxHealth - player.health) * 2);
+        ctx.font = '11px Arial';
+        ctx.fillStyle = '#aaa';
+        ctx.fillText(`Full repair: ${repairCost}cr`, px + 150, y);
 
-      this._drawTradeButton(ctx, px + panelW - 135, y - 13, 120, 22, 'REPAIR', '#a33', () => {
-        // Re-check at click time
-        const cost = Math.ceil((player.maxHealth - player.health) * 2);
-        if (cost > 0 && player.credits >= cost) {
-          player.credits -= cost;
-          player.health = player.maxHealth;
-          import('../audio/SoundEngine.js').then(m => m.playSFX('dock'));
-        }
-      });
+        this._drawTradeButton(ctx, px + panelW - 135, y - 13, 120, 22, 'REPAIR', '#a33', () => {
+          const cost = Math.ceil((player.maxHealth - player.health) * 2);
+          if (cost > 0 && player.credits >= cost) {
+            player.credits -= cost;
+            player.health = player.maxHealth;
+            import('../audio/SoundEngine.js').then(m => m.playSFX('dock'));
+          }
+        });
+      }
       y += 30;
     }
 
-    // === UPGRADES ===
+    // === UPGRADES — filtered by station type, gated by debt ===
     ctx.strokeStyle = '#335';
     ctx.beginPath();
     ctx.moveTo(px + 15, y - 5);
     ctx.lineTo(px + panelW - 15, y - 5);
     ctx.stroke();
 
-    ctx.fillStyle = '#fa4';
+    const upgradesLocked = player.debt > 0 && services.debt;
+
+    ctx.fillStyle = upgradesLocked ? '#666' : '#fa4';
     ctx.font = 'bold 13px Arial';
-    ctx.fillText('UPGRADES', px + 15, y + 10);
+    ctx.fillText(upgradesLocked ? '🔒 UPGRADES' : 'UPGRADES', px + 15, y + 10);
+    if (upgradesLocked) {
+      ctx.font = '10px Arial';
+      ctx.fillStyle = '#888';
+      ctx.fillText('Pay off debt to access', px + 140, y + 10);
+      y += 30;
+    } else {
     y += 25;
 
-    // Two columns of upgrades
-    const upgrades = [
+    // All possible upgrades — will be filtered by station
+    const allUpgrades = [
       { name: 'Cargo Hold', desc: '+20 capacity', id: 'CARGO', levelKey: 'cargoCapacityLevel', fn: () => player.upgradeCargoCapacity(), effect: 'MOD' },
       { name: 'Thrust Eff.', desc: 'Less energy/thrust', id: 'THRUST_EFFICIENCY', levelKey: 'thrustEfficiencyLevel', fn: () => player.upgradeThrustEfficiency(), effect: 'EFF' },
       { name: 'Ammo Eff.', desc: 'Less energy/shot', id: 'AMMO_EFFICIENCY', levelKey: 'ammoEfficiencyLevel', fn: () => player.upgradeAmmoEfficiency(), effect: 'EFF' },
@@ -1581,6 +1661,10 @@ export class GameLoop {
       { name: 'Blaster Dmg', desc: '+25% damage', id: 'BLASTER_DAMAGE', levelKey: 'blasterDamageLevel', fn: () => player.upgradeBlasterDamage(), effect: 'PWR' },
       { name: 'Energy Tank', desc: '+25 max energy', id: 'CAPACITY', levelKey: 'energyCapacityLevel', fn: () => player.upgradeEnergyCapacity(), effect: 'MOD' },
     ];
+    // Filter to only upgrades this station offers
+    const upgrades = allowedUpgradeIds.length > 0
+      ? allUpgrades.filter(u => allowedUpgradeIds.includes(u.id))
+      : allUpgrades;
     upgrades.forEach(u => { u.level = player[u.levelKey] || 1; });
 
     const colW = (panelW - 40) / 2;
@@ -1638,8 +1722,10 @@ export class GameLoop {
       });
     }
 
-    // Close instructions
     y += Math.ceil(upgrades.length / 2) * 42 + 15;
+    } // end upgrades else block
+
+    // Close instructions
     ctx.fillStyle = '#555';
     ctx.font = '11px Arial';
     ctx.textAlign = 'center';
