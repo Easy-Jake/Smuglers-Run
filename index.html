@@ -119,11 +119,15 @@
       <!-- Game Over Screen -->
       <div id="gameOverScreen" class="screen">
         <h2>Game Over</h2>
-        <div class="score-display"></div>
-        <div class="high-score-display"></div>
+        <div class="score-display">
+          Final Score: <span id="finalScore">0</span><br>
+          Credits Earned: <span id="creditsEarned">0</span><br>
+          Time Survived: <span id="timeSurvived">0</span>s
+        </div>
+        <div class="high-score-display" id="bestRunDisplay"></div>
         <div class="menu-buttons">
-          <button class="restart-button">Restart</button>
-          <button class="main-menu-button">Main Menu</button>
+          <button id="gameOverRestart" class="restart-button">Restart</button>
+          <button id="gameOverMainMenu" class="main-menu-button">Main Menu</button>
         </div>
       </div>
     </div>

@@ -951,14 +951,14 @@ export class GameLoop {
 
     // Beacons (pulsing red — investigation signal)
     if (gs.beacons) {
-      const pulse = 0.4 + Math.sin(Date.now() / 200) * 0.6;
+      const pulse = Math.max(0.1, 0.5 + Math.sin(Date.now() / 200) * 0.5);
       for (const b of gs.beacons) {
         if (!b.active) continue;
         const bx = mx + b.x * scaleX;
         const by = my + b.y * scaleY;
         ctx.fillStyle = `rgba(255, 60, 60, ${pulse})`;
         ctx.beginPath();
-        ctx.arc(bx, by, 4 * pulse, 0, Math.PI * 2);
+        ctx.arc(bx, by, Math.max(1, 4 * pulse), 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#f44';
         ctx.fillRect(bx - 1, by - 1, 2, 2);

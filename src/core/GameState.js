@@ -401,35 +401,42 @@ export class GameState {
     }
     this.lastRun = { score: finalScore, credits: creditsEarned, time: timeSurvived, isNewBest, prevBest: best.score || 0 };
 
-    // Update game over screen
+    // Update game over screen — use IDs so we don't grab wrong elements
     const elements = {
       finalScore: document.getElementById('finalScore'),
       creditsEarned: document.getElementById('creditsEarned'),
       timeSurvived: document.getElementById('timeSurvived'),
-      gameOverScreen: document.getElementById('gameOverScreen')
+      bestRunDisplay: document.getElementById('bestRunDisplay'),
+      gameOverScreen: document.getElementById('gameOverScreen'),
+      restartBtn: document.getElementById('gameOverRestart'),
+      menuBtn: document.getElementById('gameOverMainMenu'),
     };
 
-    // Safely update UI elements if they exist
     if (elements.finalScore) elements.finalScore.textContent = finalScore;
     if (elements.creditsEarned) elements.creditsEarned.textContent = creditsEarned;
     if (elements.timeSurvived) elements.timeSurvived.textContent = timeSurvived;
-    
+    if (elements.bestRunDisplay) {
+      if (isNewBest) {
+        elements.bestRunDisplay.innerHTML = `<span style="color:#ff0;">★ NEW BEST! ★</span>`;
+      } else if (best.score > 0) {
+        elements.bestRunDisplay.innerHTML = `Best Run: <span style="color:#8af;">${best.score}</span>`;
+      }
+    }
+
     // Show game over screen
     if (elements.gameOverScreen) {
       elements.gameOverScreen.classList.add('active');
     }
 
-    // Wire restart button
-    const restartBtn = document.querySelector('.restart-button');
-    if (restartBtn) {
-      restartBtn.onclick = () => {
+    // Wire restart button (scoped by ID so it doesn't grab pause-menu buttons)
+    if (elements.restartBtn) {
+      elements.restartBtn.onclick = () => {
         if (elements.gameOverScreen) elements.gameOverScreen.classList.remove('active');
         this.reset();
       };
     }
-    const menuBtn = document.querySelector('.main-menu-button');
-    if (menuBtn) {
-      menuBtn.onclick = () => {
+    if (elements.menuBtn) {
+      elements.menuBtn.onclick = () => {
         if (elements.gameOverScreen) elements.gameOverScreen.classList.remove('active');
         window.location.reload();
       };
