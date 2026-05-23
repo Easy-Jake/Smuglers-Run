@@ -32,6 +32,62 @@ export class CollisionHandler {
     this._checkPlayerVsEnemies();
     this._checkProjectilesVsEnemies();
     this._checkEnemyProjectilesVsPlayer();
+    this._checkPlayerVsDebris();
+    this._checkProjectilesVsDebris();
+  }
+
+  _checkPlayerVsDebris() {
+    const player = this.gameState.player;
+    if (!player || !player.active || !this.gameState.debris) return;
+    for (const d of this.gameState.debris) {
+      if (!d.active) continue;
+      const dx = player.x - d.x;
+      const dy = player.y - d.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < player.radius + d.radius) {
+        // Damage based on relative impact speed (light)
+        const pvx = player.velocity?.x || 0;
+        const pvy = player.velocity?.y || 0;
+        const dvx = pvx - d.vx;
+        const dvy = pvy - d.vy;
+        const impact = Math.sqrt(dvx * dvx + dvy * dvy);
+        if (impact > 0.5) {
+          const dmg = Math.max(1, Math.floor(impact * d.collisionDamage * 0.3));
+          if (!player.invulnerable) {
+            player.takeDamage(dmg, this.gameState);
+            playSFX('hit');
+          }
+        }
+        // Always destroy the debris on contact
+        d.active = false;
+        // Light velocity nudge
+        if (player.velocity) {
+          const nx = dx / (dist || 1);
+          const ny = dy / (dist || 1);
+          const Vector2DCtor = player.velocity.constructor;
+          player.velocity = new Vector2DCtor(pvx + nx * 0.3, pvy + ny * 0.3);
+        }
+      }
+    }
+  }
+
+  _checkProjectilesVsDebris() {
+    if (!this.gameState.debris) return;
+    const projectiles = this.gameState.projectiles || [];
+    for (const proj of projectiles) {
+      if (!proj.active || proj.owner !== 'player') continue;
+      for (const d of this.gameState.debris) {
+        if (!d.active) continue;
+        const dx = proj.x - d.x;
+        const dy = proj.y - d.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < proj.radius + d.radius) {
+          d.active = false;
+          proj.active = false;
+          break;
+        }
+      }
+    }
   }
 
   /**

@@ -3,6 +3,9 @@ import { Player } from '../entities/Player.js';
 import { Asteroid } from '../entities/Asteroid.js';
 import { Station } from '../entities/Station.js';
 import { Enemy } from '../entities/Enemy.js';
+import { Debris } from '../entities/Debris.js';
+import { NPCShip } from '../entities/NPCShip.js';
+import { Beacon } from '../entities/Beacon.js';
 import { ASTEROID_FIELDS, FIXED_STATIONS, MAP_WIDTH, MAP_HEIGHT, ZONES, ENEMY_TIERS, RESOURCE_TYPES } from '../config/mapLayout.js';
 
 export class GameState {
@@ -29,6 +32,10 @@ export class GameState {
     this.particles = [];
     this.cargoItems = [];
     this.resources = [];
+    this.debris = [];          // ambient drifting junk
+    this.npcShips = [];        // neutral NPCs
+    this.beacons = [];         // distress signals
+    this._beaconSpawnTimer = 0; // countdown to next beacon
 
     // Stars background
     this.stars = [];
@@ -68,6 +75,17 @@ export class GameState {
     this.particles.forEach(particle => particle.update(deltaTime));
     this.cargoItems.forEach(cargo => cargo.update(deltaTime));
     if (this.resources) this.resources.forEach(r => r.update(deltaTime));
+    if (this.debris) this.debris.forEach(d => d.update(deltaTime, this));
+    if (this.npcShips) this.npcShips.forEach(n => n.update(deltaTime, this));
+    if (this.beacons) this.beacons.forEach(b => b.update(deltaTime, this));
+
+    // Periodically spawn a new beacon in the free zone
+    this._beaconSpawnTimer = (this._beaconSpawnTimer || 0) - deltaTime;
+    const activeBeacons = (this.beacons || []).filter(b => b.active).length;
+    if (this._beaconSpawnTimer <= 0 && activeBeacons < 2) {
+      this._spawnRandomBeacon();
+      this._beaconSpawnTimer = 60 + Math.random() * 60; // every 60-120 seconds
+    }
 
     // Remove inactive objects
     this.projectiles = this.projectiles.filter(p => p.active);
@@ -76,6 +94,9 @@ export class GameState {
     this.enemies = this.enemies.filter(e => e.active);
     this.cargoItems = this.cargoItems.filter(c => c.active);
     if (this.resources) this.resources = this.resources.filter(r => r.active);
+    if (this.debris) this.debris = this.debris.filter(d => d.active);
+    if (this.npcShips) this.npcShips = this.npcShips.filter(n => n.active);
+    if (this.beacons) this.beacons = this.beacons.filter(b => b.active);
 
     // Sync player stats to gameState for HUD
     if (this.player) {
@@ -145,6 +166,102 @@ export class GameState {
 
     // Spawn enemies from zone definitions
     this._spawnEnemies();
+
+    // Spawn ambient drifting debris throughout the world
+    this._spawnDebris();
+
+    // Spawn NPC traffic — gives the world life
+    this._spawnNPCs();
+
+    // Initial beacon to greet new players
+    this._beaconSpawnTimer = 20;
+  }
+
+  _spawnRandomBeacon() {
+    // Place in free zone, away from station center
+    const center = { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 };
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 1500 + Math.random() * 1500;
+    const x = center.x + Math.cos(angle) * dist;
+    const y = center.y + Math.sin(angle) * dist;
+    // 60% reward, 40% trap — favor the player
+    const kind = Math.random() < 0.6 ? 'reward' : 'trap';
+    this.beacons.push(new Beacon(x, y, kind));
+  }
+
+  _spawnNPCs() {
+    // Station-to-station traders
+    const stationPositions = this.stations.map(s => ({ x: s.x, y: s.y }));
+
+    // 3 traders that loop between station and a far waypoint
+    for (let i = 0; i < 3; i++) {
+      const startStation = stationPositions[i % stationPositions.length];
+      // Create a loop: station → random point in free zone → back
+      const looper = [
+        { x: startStation.x + 1500, y: startStation.y + 1500 },
+        { x: startStation.x - 1500, y: startStation.y + 1200 },
+        { x: startStation.x + 1200, y: startStation.y - 1500 },
+        { x: startStation.x, y: startStation.y + 2000 },
+      ];
+      const sx = looper[0].x + (Math.random() - 0.5) * 500;
+      const sy = looper[0].y + (Math.random() - 0.5) * 500;
+      this.npcShips.push(new NPCShip(sx, sy, 'trader', looper));
+    }
+
+    // 5 drifters wandering randomly through free zone
+    const freeCenter = { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 };
+    for (let i = 0; i < 5; i++) {
+      const waypoints = [];
+      for (let w = 0; w < 4; w++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = 1000 + Math.random() * 2000;
+        waypoints.push({
+          x: freeCenter.x + Math.cos(a) * d,
+          y: freeCenter.y + Math.sin(a) * d,
+        });
+      }
+      const sx = waypoints[0].x;
+      const sy = waypoints[0].y;
+      this.npcShips.push(new NPCShip(sx, sy, 'drifter', waypoints));
+    }
+
+    // 4 miners hanging around asteroid fields
+    const miningFields = ['junkyardDebris', 'ferroFieldScatter', 'mineShafts', 'gangField'];
+    for (const fieldName of miningFields) {
+      const field = ASTEROID_FIELDS[fieldName];
+      if (!field) continue;
+      const waypoints = [];
+      for (let w = 0; w < 4; w++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = Math.random() * 600;
+        waypoints.push({
+          x: field.x + Math.cos(a) * d,
+          y: field.y + Math.sin(a) * d,
+        });
+      }
+      this.npcShips.push(new NPCShip(field.x, field.y, 'miner', waypoints));
+    }
+  }
+
+  _spawnDebris() {
+    // ~250 pieces scattered across the world
+    const count = 250;
+    for (let i = 0; i < count; i++) {
+      const x = Math.random() * MAP_WIDTH;
+      const y = Math.random() * MAP_HEIGHT;
+      // Skip if too close to a station safe zone
+      let inSafeZone = false;
+      for (const s of this.stations) {
+        const dx = x - s.x;
+        const dy = y - s.y;
+        if (Math.sqrt(dx*dx + dy*dy) < s.safeZoneRadius) {
+          inSafeZone = true;
+          break;
+        }
+      }
+      if (inSafeZone) continue;
+      this.debris.push(new Debris(x, y));
+    }
   }
 
   _spawnEnemies() {
@@ -226,6 +343,9 @@ export class GameState {
     this.stations = [];
     this.projectiles = [];
     this.particles = [];
+    this.debris = [];
+    this.npcShips = [];
+    this.beacons = [];
     this.cargoItems = [];
     this.resources = [];
 

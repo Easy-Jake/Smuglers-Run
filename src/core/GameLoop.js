@@ -540,7 +540,11 @@ export class GameLoop {
       this.gameState.stations.forEach(drawEntity);
       this.gameState.cargoItems.forEach(drawEntity);
       if (this.gameState.resources) this.gameState.resources.forEach(drawEntity);
+      // Debris rendered below asteroids for visual layering
+      if (this.gameState.debris) this.gameState.debris.forEach(drawEntity);
       this.gameState.asteroids.forEach(drawEntity);
+      if (this.gameState.npcShips) this.gameState.npcShips.forEach(drawEntity);
+      if (this.gameState.beacons) this.gameState.beacons.forEach(drawEntity);
       this.gameState.enemies.forEach(drawEntity);
       this.gameState.projectiles.forEach(drawEntity);
       this.gameState.particles.forEach(drawEntity);
@@ -898,6 +902,15 @@ export class GameLoop {
       ctx.setLineDash([]);
     }
 
+    // Debris (very faint specks — ambient texture)
+    if (gs.debris) {
+      ctx.fillStyle = 'rgba(150, 140, 130, 0.25)';
+      for (const d of gs.debris) {
+        if (!d.active) continue;
+        ctx.fillRect(mx + d.x * scaleX, my + d.y * scaleY, 1, 1);
+      }
+    }
+
     // Asteroids (tiny gray dots)
     ctx.fillStyle = 'rgba(150, 130, 100, 0.5)';
     for (const a of gs.asteroids) {
@@ -925,6 +938,31 @@ export class GameLoop {
       const sy = my + s.y * scaleY;
       ctx.fillStyle = '#0ff';
       ctx.fillRect(sx - 3, sy - 3, 6, 6);
+    }
+
+    // NPC ships (neutral — small white dots)
+    if (gs.npcShips) {
+      ctx.fillStyle = '#bbb';
+      for (const n of gs.npcShips) {
+        if (!n.active) continue;
+        ctx.fillRect(mx + n.x * scaleX - 1, my + n.y * scaleY - 1, 2, 2);
+      }
+    }
+
+    // Beacons (pulsing red — investigation signal)
+    if (gs.beacons) {
+      const pulse = 0.4 + Math.sin(Date.now() / 200) * 0.6;
+      for (const b of gs.beacons) {
+        if (!b.active) continue;
+        const bx = mx + b.x * scaleX;
+        const by = my + b.y * scaleY;
+        ctx.fillStyle = `rgba(255, 60, 60, ${pulse})`;
+        ctx.beginPath();
+        ctx.arc(bx, by, 4 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#f44';
+        ctx.fillRect(bx - 1, by - 1, 2, 2);
+      }
     }
 
     // Enemies (red dots)
